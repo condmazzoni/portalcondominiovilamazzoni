@@ -76,6 +76,8 @@
   .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line);}
   .btn-ghost:hover{border-color:var(--ink-soft);}
   .btn-danger{background:transparent;color:var(--brick);border:1px solid #e3c3ba;}
+  .btn-warning{background:#ff9800;color:#fff;border:none;}
+  .btn-warning:hover{background:#f57c00;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
   .filebox{
     border:1.5px dashed var(--line);border-radius:var(--radius);padding:14px;
@@ -241,6 +243,13 @@ let messages = [];
 let residents = [];
 let visitors = [];
 let moradorTab = 'mensagem'; // mensagem | visitante
+
+/* ---- modais de edição ---- */
+let modalEdicao = null; // null | 'condominio' | 'morador' | 'alterar-senha' | 'reset-senha'
+let residenteEdicao = null; // morador sendo editado
+let novaSenh = '';
+let confirmarSenha = '';
+let senhaAtual = '';
 let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
 
 function defaultConfig(){
@@ -323,6 +332,79 @@ function resetSessionState(){
   visitanteFiltro='todos';
   broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+}
+
+/* ---- funções de edição ---- */
+function abrirModalEditarCondominio(){
+  modalEdicao = 'condominio';
+  render();
+}
+function abrirModalEditarMorador(morador){
+  residenteEdicao = {...morador};
+  modalEdicao = 'morador';
+  render();
+}
+function abrirModalAlterarSenha(){
+  novaSenh = '';
+  confirmarSenha = '';
+  senhaAtual = '';
+  modalEdicao = 'alterar-senha';
+  render();
+}
+function abrirModalResetSenha(){
+  senhaAtual = '';
+  modalEdicao = 'reset-senha';
+  render();
+}
+function fecharModal(){
+  modalEdicao = null;
+  residenteEdicao = null;
+  novaSenh = '';
+  confirmarSenha = '';
+  senhaAtual = '';
+  render();
+}
+async function salvarEdicaoCondominio(){
+  config.nomeCondominio = config.nomeCondominio.trim();
+  if(!config.nomeCondominio){ showToast('Informe o nome do condomínio.'); return; }
+  await saveConfig();
+  fecharModal();
+  showToast('Condomínio atualizado!');
+}
+async function salvarEdicaoMorador(){
+  residenteEdicao.nome = residenteEdicao.nome.trim();
+  residenteEdicao.unidade = residenteEdicao.unidade.trim();
+  residenteEdicao.codigo = residenteEdicao.codigo.trim();
+  if(!residenteEdicao.nome || !residenteEdicao.unidade || !residenteEdicao.codigo){
+    showToast('Informe nome, unidade e código.');
+    return;
+  }
+  const idx = residents.findIndex(r=>r.id === residenteEdicao.id);
+  if(idx >= 0){
+    residents[idx] = residenteEdicao;
+    await saveResidents();
+    fecharModal();
+    showToast('Morador atualizado!');
+  }
+}
+async function executarAlterarSenha(){
+  if(!novaSenh.trim()){ showToast('Defina uma nova senha.'); return; }
+  if(novaSenh !== confirmarSenha){ showToast('As senhas não conferem.'); return; }
+  if(novaSenh.length < 4){ showToast('A senha deve ter pelo menos 4 caracteres.'); return; }
+  const morador = residents.find(r=>r.id === moradorAuth);
+  if(!morador)return;
+  morador.senha = novaSenh;
+  residents = residents.map(r=>r.id===morador.id ? morador : r);
+  await saveResidents();
+  fecharModal();
+  showToast('Senha alterada com sucesso!');
+}
+async function executarResetSenha(){
+  const novo = '1234';
+  masterConfig.pin = novo;
+  await saveMasterConfig();
+  fecharModal();
+  showToast('Senha do síndico resetada para: '+novo);
 }
 
 async function initApp(){
@@ -588,6 +670,13 @@ function renderHeader(){
   trocar.textContent='Trocar condomínio';
   trocar.onclick = sairDoCondo;
   h.appendChild(trocar);
+  if(moradorAuth){
+    const altSenha = document.createElement('button');
+    altSenha.className='icon-btn'; altSenha.style.color='var(--muted)'; altSenha.style.fontSize='12px';
+    altSenha.textContent='Alterar senha';
+    altSenha.onclick = ()=> abrirModalAlterarSenha();
+    h.appendChild(altSenha);
+  }
   return h;
 }
 
@@ -722,6 +811,9 @@ function renderMasterPanel(){
       const enterBtn = document.createElement('button');
       enterBtn.className='btn btn-ghost'; enterBtn.textContent='Acessar';
       enterBtn.onclick = ()=> entrarNoCondo(c.id);
+      const editBtn = document.createElement('button');
+      editBtn.className='btn btn-ghost'; editBtn.textContent='Editar';
+      editBtn.onclick = ()=>{ condoAtual=c.id; loadCondoData(c.id).then(()=>abrirModalEditarCondominio()); };
       const rmBtn = document.createElement('button');
       rmBtn.className='btn btn-danger'; rmBtn.textContent='Remover da lista';
       rmBtn.onclick = async ()=>{
@@ -729,7 +821,7 @@ function renderMasterPanel(){
         await saveCondominios();
         render();
       };
-      actions.appendChild(copyBtn); actions.appendChild(enterBtn); actions.appendChild(rmBtn);
+      actions.appendChild(copyBtn); actions.appendChild(enterBtn); actions.appendChild(editBtn); actions.appendChild(rmBtn);
       row.appendChild(info); row.appendChild(actions);
       listCard.appendChild(row);
     });
@@ -1574,9 +1666,13 @@ function renderMoradores(){
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.unidade)}</td><td>${escapeHtml(r.whatsapp||'—')}</td><td>${escapeHtml(r.email||'—')}</td><td>${escapeHtml(r.codigo||'—')}</td>`;
       const td = document.createElement('td');
+      const editBtn = document.createElement('button');
+      editBtn.className='icon-btn'; editBtn.textContent='Editar';
+      editBtn.onclick = ()=> abrirModalEditarMorador(r);
       const rm = document.createElement('button');
       rm.className='icon-btn'; rm.textContent='Remover';
       rm.onclick = async ()=>{ residents = residents.filter(x=>x.id!==r.id); await saveResidents(); render(); };
+      td.appendChild(editBtn);
       td.appendChild(rm);
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -1592,6 +1688,22 @@ function renderMoradores(){
 /* ---- configurações ---- */
 function renderConfig(){
   const wrap = document.createElement('div');
+
+  // Botões de ação rápida
+  const acaoCard = document.createElement('div');
+  acaoCard.className='card';
+  acaoCard.innerHTML = `<h2>Ações rápidas</h2>`;
+  const acaoDiv = document.createElement('div');
+  acaoDiv.style.display='flex'; acaoDiv.style.gap='8px'; acaoDiv.style.flexWrap='wrap';
+  const editCondoBtn = document.createElement('button');
+  editCondoBtn.className='btn btn-primary'; editCondoBtn.textContent='Editar condomínio';
+  editCondoBtn.onclick = ()=> abrirModalEditarCondominio();
+  const resetSenhaBtn = document.createElement('button');
+  resetSenhaBtn.className='btn btn-warning'; resetSenhaBtn.textContent='Reset de senha';
+  resetSenhaBtn.onclick = ()=> abrirModalResetSenha();
+  acaoDiv.appendChild(editCondoBtn); acaoDiv.appendChild(resetSenhaBtn);
+  acaoCard.appendChild(acaoDiv);
+  wrap.appendChild(acaoCard);
 
   const brandCard = document.createElement('div');
   brandCard.className='card';
@@ -1740,6 +1852,134 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
 } else {
   renderSetupGate();
 }
+</script>
+/* modais de edição */
+#modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.modal-content h2 { margin-top: 0; margin-bottom: 20px; font-size: 20px; }
+.modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
+.modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
+.modal-buttons button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.modal-buttons .btn-primary { background: var(--primary); color: white; }
+.modal-buttons .btn-secondary { background: #ccc; color: #333; }
+.modal-input-group { margin-bottom: 20px; }
+.modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
+.modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+</style>
+
+<div id="modal-backdrop" style="display:none;">
+  <div class="modal-content" id="modal-body"></div>
+</div>
+
+<script>
+function renderModal(){
+  const backdrop = document.getElementById('modal-backdrop');
+  const body = document.getElementById('modal-body');
+  
+  if(!modalEdicao){
+    backdrop.style.display = 'none';
+    return;
+  }
+  
+  backdrop.style.display = 'flex';
+  
+  if(modalEdicao === 'condominio'){
+    body.innerHTML = `
+      <h2>Editar Condomínio</h2>
+      <div class="modal-input-group">
+        <label>Nome</label>
+        <input type="text" id="modal-condo-nome" value="${escapeHtml(config.nomeCondominio)}" placeholder="Nome do condomínio">
+      </div>
+      <div class="modal-input-group">
+        <label>E-mail</label>
+        <input type="email" id="modal-condo-email" value="${escapeHtml(config.emailEndereco)}" placeholder="email@condominio.com">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="atualizarModalCondominio()">Salvar</button>
+      </div>
+    `;
+    document.getElementById('modal-condo-nome').focus();
+  } else if(modalEdicao === 'morador'){
+    body.innerHTML = `
+      <h2>Editar Morador</h2>
+      <div class="modal-input-group">
+        <label>Nome</label>
+        <input type="text" id="modal-res-nome" value="${escapeHtml(residenteEdicao.nome)}" placeholder="Nome">
+      </div>
+      <div class="modal-input-group">
+        <label>Unidade</label>
+        <input type="text" id="modal-res-unidade" value="${escapeHtml(residenteEdicao.unidade)}" placeholder="Bloco/apto">
+      </div>
+      <div class="modal-input-group">
+        <label>WhatsApp</label>
+        <input type="tel" id="modal-res-whatsapp" value="${escapeHtml(residenteEdicao.whatsapp)}" placeholder="(11) 90000-0000">
+      </div>
+      <div class="modal-input-group">
+        <label>E-mail</label>
+        <input type="email" id="modal-res-email" value="${escapeHtml(residenteEdicao.email)}" placeholder="email@exemplo.com">
+      </div>
+      <div class="modal-input-group">
+        <label>Código de acesso</label>
+        <input type="text" id="modal-res-codigo" value="${escapeHtml(residenteEdicao.codigo)}" placeholder="Ex: 302B">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="atualizarModalMorador()">Salvar</button>
+      </div>
+    `;
+    document.getElementById('modal-res-nome').focus();
+  } else if(modalEdicao === 'alterar-senha'){
+    body.innerHTML = `
+      <h2>Alterar Senha</h2>
+      <div class="modal-input-group">
+        <label>Nova Senha</label>
+        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" onchange="novaSenh=this.value">
+      </div>
+      <div class="modal-input-group">
+        <label>Confirmar Senha</label>
+        <input type="password" id="modal-confirmar-senha" placeholder="Repita a senha" onchange="confirmarSenha=this.value">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="executarAlterarSenha()">Alterar</button>
+      </div>
+    `;
+    document.getElementById('modal-nova-senha').focus();
+  } else if(modalEdicao === 'reset-senha'){
+    body.innerHTML = `
+      <h2>Reset de Senha</h2>
+      <p>A senha do síndico será resetada para: <strong>1234</strong></p>
+      <p>Tem certeza que deseja continuar?</p>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="executarResetSenha()">Resetar Senha</button>
+      </div>
+    `;
+  }
+}
+
+function atualizarModalCondominio(){
+  config.nomeCondominio = document.getElementById('modal-condo-nome').value || config.nomeCondominio;
+  config.emailEndereco = document.getElementById('modal-condo-email').value || config.emailEndereco;
+  salvarEdicaoCondominio();
+}
+
+function atualizarModalMorador(){
+  residenteEdicao.nome = document.getElementById('modal-res-nome').value || residenteEdicao.nome;
+  residenteEdicao.unidade = document.getElementById('modal-res-unidade').value || residenteEdicao.unidade;
+  residenteEdicao.whatsapp = document.getElementById('modal-res-whatsapp').value || residenteEdicao.whatsapp;
+  residenteEdicao.email = document.getElementById('modal-res-email').value || residenteEdicao.email;
+  residenteEdicao.codigo = document.getElementById('modal-res-codigo').value || residenteEdicao.codigo;
+  salvarEdicaoMorador();
+}
+
+// renderizar modal toda vez que render() é chamado
+const originalRender = render;
+render = function(){
+  originalRender();
+  renderModal();
+};
 </script>
 </body>
 </html>
