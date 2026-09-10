@@ -151,13 +151,13 @@
   .grid-two{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
   @media(max-width:800px){.grid-two{grid-template-columns:1fr;}}
   /* modais de edição */
-  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
   .modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .modal-content h2 { margin-top: 0; margin-bottom: 20px; font-size: 20px; }
   .modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
   .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
   .modal-buttons button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-  .modal-buttons .btn-primary { background: var(--primary); color: white; }
+  .modal-buttons .btn-primary { background: var(--ink); color: white; }
   .modal-buttons .btn-secondary { background: #ccc; color: #333; }
   .modal-input-group { margin-bottom: 20px; }
   .modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
@@ -404,13 +404,13 @@ async function executarAlterarSenha(){
   if(!novaSenh.trim()){ showToast('Defina uma nova senha.'); return; }
   if(novaSenh !== confirmarSenha){ showToast('As senhas não conferem.'); return; }
   if(novaSenh.length < 4){ showToast('A senha deve ter pelo menos 4 caracteres.'); return; }
-  const morador = residents.find(r=>r.id === moradorAuth);
-  if(!morador)return;
-  morador.senha = novaSenh;
-  residents = residents.map(r=>r.id===morador.id ? morador : r);
+  // o acesso do morador é unidade + código, então é o código que muda aqui
+  const morador = moradorAuth ? residents.find(r => normaliza(r.unidade) === normaliza(moradorAuth.unidade)) : null;
+  if(!morador){ showToast('Não consegui identificar sua unidade. Entre novamente.'); return; }
+  morador.codigo = novaSenh.trim();
   await saveResidents();
   fecharModal();
-  showToast('Senha alterada com sucesso!');
+  showToast('Código de acesso alterado com sucesso!');
 }
 async function executarResetSenha(){
   const novo = '1234';
@@ -848,8 +848,7 @@ function renderMasterPanel(){
 
   return wrap;
 }
-
-/* ================= PORTAL DO MORADOR ================= */
+  /* ================= PORTAL DO MORADOR ================= */
 let formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
 let moradorAuth = null; // { unidade, nomeSugerido }
 let gateUnidade = '';
@@ -1048,9 +1047,10 @@ function renderMensagemForm(){
       messages.unshift(msg);
       formState.enviado = true;
       if(backendConfig){
-        let anexo = null;
-        if(msg.imagemData) anexo = { dataUrl: msg.imagemData, nome: 'foto.jpg' };
-        else if(msg.videoData) anexo = { dataUrl: msg.videoData, nome: 'video.mp4' };
+        // manda foto E vídeo juntos (antes só ia um dos dois) e avisa se o e-mail falhar
+        const anexos = [];
+        if(msg.imagemData) anexos.push({ dataUrl: msg.imagemData, nome: formState.imagemNome || 'foto.jpg' });
+        if(msg.videoData) anexos.push({ dataUrl: msg.videoData, nome: formState.videoNome || 'video.mp4' });
         chamarBackend('/api/notificar-sindico', {
           canalWhatsapp: config.whatsappAtivo,
           canalEmail: config.emailAtivo,
@@ -1058,7 +1058,11 @@ function renderMensagemForm(){
           emailPara: config.emailEndereco,
           assunto: 'Nova ' + labelTipo(msg.tipo).toLowerCase() + ' — ' + msg.unidade,
           mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto,
-          anexo
+          anexos
+        }).then(r=>{
+          if(r && r.email && r.email.enviado === false){
+            showToast('Mensagem registrada, mas o e-mail falhou: ' + r.email.erro);
+          }
         });
       }
     }catch(e){
@@ -1508,7 +1512,7 @@ function renderEnviar(){
   const warn = document.createElement('div');
   warn.className='warn';
   warn.textContent = backendConfig
-    ? 'O envio real por WhatsApp e e-mail está conectado. Alguns destinatários podem não receber se o número/e-mail cadastrado estiver errado, ou se o WhatsApp ainda estiver no Sandbox de testes.'
+    ? 'O envio por e-mail está conectado e funcionando. O envio por WhatsApp está em construção — será liberado quando o condomínio autorizar a contratação do WhatsApp Business.'
     : 'O envio real por WhatsApp e e-mail ainda não está conectado (ver Configurações → Conexão com o servidor de envio). Por enquanto, a mensagem só fica registrada aqui.';
   card.appendChild(warn);
 
@@ -1602,10 +1606,11 @@ function renderEnviar(){
       } else if(resultado && resultado.resultados){
         const okWA = resultado.resultados.filter(r=>r.whatsapp && r.whatsapp.enviado).length;
         const okEmail = resultado.resultados.filter(r=>r.email && r.email.enviado).length;
+        const waEmConstrucao = resultado.resultados.some(r=>r.whatsapp && r.whatsapp.emConstrucao);
         const partes = [];
-        if(bc.canalWhatsapp) partes.push(okWA+'/'+totalDestinatarios+' por WhatsApp');
-        if(bc.canalEmail) partes.push(okEmail+'/'+totalDestinatarios+' por e-mail');
-        showToast('Enviado: ' + partes.join(' · ') + '.');
+        if(bc.canalWhatsapp) partes.push(waEmConstrucao ? 'WhatsApp: em construção' : 'WhatsApp: '+okWA+'/'+totalDestinatarios);
+        if(bc.canalEmail) partes.push('E-mail: '+okEmail+'/'+totalDestinatarios);
+        showToast(partes.join(' · '));
       } else {
         showToast('Mensagem registrada para '+totalDestinatarios+' morador(es).');
       }
@@ -1762,7 +1767,7 @@ function renderConfig(){
   waCard.className='card';
   waCard.innerHTML = `<h2>WhatsApp</h2><p class="lead">Número usado para receber e enviar mensagens dos moradores.</p>`;
   const waWarn = document.createElement('div'); waWarn.className='warn';
-  waWarn.textContent = 'Este painel guarda apenas o número de exibição. O token de acesso da API do WhatsApp Business precisa ficar em um back-end seguro (nunca em uma página acessada pelos moradores) — veja a explicação no fim desta página.';
+  waWarn.textContent = 'O envio por WhatsApp está em construção — depende da contratação de um número WhatsApp Business, que precisa de autorização do condomínio. O número abaixo já pode ficar cadastrado; ele será usado assim que o canal for liberado.';
   waCard.appendChild(waWarn);
   const waField = field('Número do WhatsApp do condomínio', null);
   const waInput = document.createElement('input');
@@ -1871,14 +1876,14 @@ function renderModal(){
   const backdrop = document.getElementById('modal-backdrop');
   if(!backdrop) return; // modal não existe na DOM, ignorar
   const body = document.getElementById('modal-body');
-  
+
   if(!modalEdicao){
     backdrop.style.display = 'none';
     return;
   }
-  
+
   backdrop.style.display = 'flex';
-  
+
   if(modalEdicao === 'condominio'){
     body.innerHTML = `
       <h2>Editar Condomínio</h2>
@@ -1927,14 +1932,14 @@ function renderModal(){
     document.getElementById('modal-res-nome').focus();
   } else if(modalEdicao === 'alterar-senha'){
     body.innerHTML = `
-      <h2>Alterar Senha</h2>
+      <h2>Alterar código de acesso</h2>
       <div class="modal-input-group">
-        <label>Nova Senha</label>
-        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" onchange="novaSenh=this.value">
+        <label>Novo código</label>
+        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" oninput="novaSenh=this.value">
       </div>
       <div class="modal-input-group">
-        <label>Confirmar Senha</label>
-        <input type="password" id="modal-confirmar-senha" placeholder="Repita a senha" onchange="confirmarSenha=this.value">
+        <label>Confirmar código</label>
+        <input type="password" id="modal-confirmar-senha" placeholder="Repita o código" oninput="confirmarSenha=this.value">
       </div>
       <div class="modal-buttons">
         <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
@@ -1974,9 +1979,21 @@ function atualizarModalMorador(){
 function mostrarModal(){
   try { renderModal(); }catch(e){ console.error(e); }
 }
+
+// Rede de segurança: fecha o modal ao clicar fora dele ou apertar Esc.
+// Isso é o que garante que ninguém fique preso numa tela travada pelo celular,
+// onde não existe console do navegador para destravar.
+document.addEventListener('click', function(e){
+  const backdrop = document.getElementById('modal-backdrop');
+  if(backdrop && e.target === backdrop) fecharModal();
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') fecharModal();
+});
 </script>
-<div id="modal-backdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:1000;">0;">
-  <div style="background:white;border-radius:8px;padding:30px;max-width:500px;width:90%;box-shadow:0 4px 12px rgba(0,0,0,0.15);" id="modal-body"></div>
+<div id="modal-backdrop" style="display:none">
+  <div class="modal-content" id="modal-body"></div>
 </div>
 </body>
 </html>
+  
