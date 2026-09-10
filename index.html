@@ -1,174 +1,1709 @@
-import express from 'express';
-import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-import twilio from 'twilio';
-import nodemailer from 'nodemailer';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, 'data.json');
-
-const app = express();
-app.use(express.json({ limit: '8mb' }));
-app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }));
-
-// Limite básico de uso: no máximo 120 requisições por minuto por IP.
-// (mais alto que antes porque agora o painel inteiro depende deste servidor
-// para ler e salvar dados, não só para enviar mensagens)
-const limiter = rateLimit({ windowMs: 60 * 1000, max: 120 });
-app.use(limiter);
-
-function checkApiKey(req, res, next) {
-  const key = req.header('x-api-key');
-  if (!process.env.API_KEY || key !== process.env.API_KEY) {
-    return res.status(401).json({ erro: 'Chave de API ausente ou inválida.' });
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal do Condomínio</title>
+<style>
+  :root{
+    --bg:#F2F4F3;
+    --panel:#FFFFFF;
+    --ink:#1F3A3D;
+    --ink-soft:#4E6265;
+    --muted:#8A9B9C;
+    --line:#DCE3E2;
+    --accent:#B8901F;
+    --accent-ink:#5C4813;
+    --brick:#A44B36;
+    --brick-bg:#F6E8E4;
+    --leaf:#3F7D58;
+    --leaf-bg:#E7F1EA;
+    --sky:#3A6B93;
+    --sky-bg:#E7EEF4;
+    --radius:10px;
+    --radius-lg:16px;
   }
-  next();
-}
-
-/* ---------- banco de dados simples (arquivo JSON no disco) ----------
-   Guarda tudo do painel: condomínios, moradores, mensagens, visitantes,
-   configurações. Não é um banco de verdade, mas resolve o problema de
-   persistência sem exigir contratar outro serviço.
-   ATENÇÃO: no plano gratuito do Render, esse arquivo pode ser apagado
-   quando o backend for republicado (um novo "deploy"). Para uso pesado
-   ou definitivo, o próximo passo seria trocar isso por um banco de
-   dados de verdade (ex: PostgreSQL). */
-let db = {};
-try {
-  if (fs.existsSync(DB_PATH)) {
-    db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
   }
-} catch (e) {
-  console.error('Não foi possível ler data.json, começando vazio.', e.message);
-  db = {};
-}
-function salvarDb() {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(db), 'utf8');
-  } catch (e) {
-    console.error('Não foi possível gravar data.json:', e.message);
+  .app{max-width:1100px;margin:0 auto;padding:0 16px 64px;}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px 4px 18px;border-bottom:1px solid var(--line);margin-bottom:24px;
+    gap:12px;flex-wrap:wrap;
   }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .mark{
+    width:34px;height:34px;border-radius:8px;background:var(--ink);
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:15px;flex-shrink:0;
+  }
+  .brand h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-0.01em;}
+  .brand p{margin:0;font-size:12.5px;color:var(--muted);}
+  nav.switch{display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px;}
+  nav.switch button{
+    border:none;background:transparent;padding:8px 16px;border-radius:999px;
+    font-size:13.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;
+  }
+  nav.switch button.active{background:var(--ink);color:#fff;}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:24px;}
+  .card + .card{margin-top:16px;}
+  h2{font-size:17px;margin:0 0 4px;letter-spacing:-0.01em;}
+  h3{font-size:14.5px;margin:0 0 10px;color:var(--ink);}
+  .lead{color:var(--ink-soft);font-size:14px;margin:0 0 20px;}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:5px;}
+  input[type=text],input[type=tel],input[type=email],input[type=password],input[type=number],select,textarea{
+    width:100%;border:1px solid var(--line);border-radius:var(--radius);
+    padding:10px 12px;font-size:14.5px;font-family:inherit;color:var(--ink);
+    background:#fff;
+  }
+  textarea{resize:vertical;min-height:90px;}
+  .field{margin-bottom:16px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:560px){.row2{grid-template-columns:1fr;}}
+  .btn{
+    border:none;border-radius:var(--radius);padding:11px 18px;font-size:14px;font-weight:650;
+    cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-primary:hover{background:#16292c;}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .btn-danger{background:transparent;color:var(--brick);border:1px solid #e3c3ba;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .filebox{
+    border:1.5px dashed var(--line);border-radius:var(--radius);padding:14px;
+    font-size:13px;color:var(--muted);background:#FAFBFB;
+  }
+  .filebox.has{border-color:var(--leaf);color:var(--ink);background:var(--leaf-bg);}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:650;}
+  .pill-reclamacao{background:var(--brick-bg);color:var(--brick);}
+  .pill-sugestao{background:var(--sky-bg);color:var(--sky);}
+  .pill-elogio{background:var(--leaf-bg);color:var(--leaf);}
+  .pill-pendente{background:#F5EEDC;color:var(--accent-ink);}
+  .pill-alerta{background:#FBEAEA;color:#A4392B;}
+  .pill-aprovado{background:var(--leaf-bg);color:var(--leaf);}
+  .pill-reprovado{background:var(--brick-bg);color:var(--brick);}
+  .subtabs{display:flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:20px;width:fit-content;}
+  .subtabs button{border:none;background:transparent;padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+  .subtabs button.active{background:var(--ink);color:#fff;}
+  .visit-item{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line);}
+  .visit-item:last-child{border-bottom:none;}
+  .visit-actions{display:flex;gap:6px;flex-shrink:0;}
+  .visit-actions button{border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:650;cursor:pointer;}
+  .visit-actions button.aprovar{color:var(--leaf);border-color:#bfe0cc;}
+  .visit-actions button.reprovar{color:var(--brick);border-color:#e3c3ba;}
+  .msg-item{
+    display:flex;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line);cursor:pointer;
+  }
+  .msg-item:hover{background:#FAFBFB;}
+  .msg-item.unread::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:7px;flex-shrink:0;}
+  .msg-item:not(.unread)::before{content:"";width:7px;height:7px;flex-shrink:0;}
+  .msg-item .meta{font-size:12px;color:var(--muted);margin-top:3px;}
+  .msg-item .txt{font-size:13.5px;color:var(--ink-soft);margin-top:4px;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;}
+  .empty{padding:40px 10px;text-align:center;color:var(--muted);font-size:13.5px;}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:12px 20px;border-radius:999px;
+    font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:50;max-width:90vw;text-align:center;
+  }
+  .tabbar{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px;}
+  .tabbar button{
+    border:none;background:transparent;padding:10px 4px;margin-right:22px;font-size:13.5px;
+    font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;
+  }
+  .tabbar button.active{color:var(--ink);border-color:var(--accent);}
+  .warn{
+    background:var(--sky-bg);border:1px solid #c9d9e6;color:#2c5170;border-radius:var(--radius);
+    padding:12px 14px;font-size:12.5px;margin-bottom:16px;
+  }
+  .resident-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);}
+  .resident-row:last-child{border-bottom:none;}
+  .resident-row input[type=checkbox]{width:16px;height:16px;flex-shrink:0;}
+  .resident-name{font-weight:600;font-size:13.5px;}
+  .resident-unit{font-size:12px;color:var(--muted);}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .toolbar button{
+    border:1px solid var(--line);background:#fff;color:var(--ink-soft);padding:6px 13px;
+    border-radius:999px;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .toolbar button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);}
+  .icon-btn{background:none;border:none;color:var(--brick);cursor:pointer;font-size:12.5px;font-weight:600;}
+  .pin-gate{max-width:340px;margin:60px auto;}
+  .success-box{text-align:center;padding:40px 10px;}
+  .success-box .check{
+    width:52px;height:52px;border-radius:50%;background:var(--leaf-bg);color:var(--leaf);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px;
+  }
+  video, img.preview{max-width:100%;border-radius:var(--radius);margin-top:6px;display:block;}
+  .grid-two{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
+  @media(max-width:800px){.grid-two{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ---------- conexão com o servidor real (substitui a memória do Claude) ----------
+   Se BACKEND_URL_PADRAO e BACKEND_API_KEY_PADRAO estiverem preenchidos
+   abaixo, TODO MUNDO que abrir este arquivo usa essa conexão automaticamente
+   — sem precisar ver nenhuma tela técnica. Preencha os dois ANTES de publicar
+   o arquivo para os moradores. Se deixar em branco, cada navegador precisa
+   configurar manualmente na tela "Conectar ao servidor" (útil só para teste). */
+const BACKEND_URL_PADRAO = 'https://portalmazzoni.onrender.com';
+const BACKEND_API_KEY_PADRAO = 'N@th@li@31012002';
+
+let backendConfig = null;
+function carregarConfigServidor(){
+  if(BACKEND_URL_PADRAO && BACKEND_API_KEY_PADRAO){
+    backendConfig = { url: BACKEND_URL_PADRAO, apiKey: BACKEND_API_KEY_PADRAO };
+    return;
+  }
+  try{
+    const raw = localStorage.getItem('painel_condominio_servidor');
+    if(raw) backendConfig = JSON.parse(raw);
+  }catch(e){ backendConfig = null; }
 }
+function salvarConfigServidor(cfg){
+  backendConfig = cfg;
+  try{ localStorage.setItem('painel_condominio_servidor', JSON.stringify(cfg)); }catch(e){}
+}
+function esquecerConfigServidor(){
+  if(BACKEND_URL_PADRAO && BACKEND_API_KEY_PADRAO){
+    showToast('A conexão está fixa neste arquivo (preenchida antes de publicar). Para trocar, edite BACKEND_API_KEY_PADRAO no código.');
+    return;
+  }
+  backendConfig = null;
+  try{ localStorage.removeItem('painel_condominio_servidor'); }catch(e){}
+  window.location.reload();
+}
+carregarConfigServidor();
 
-app.post('/api/kv/get', checkApiKey, (req, res) => {
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ erro: 'key é obrigatório.' });
-  const valor = Object.prototype.hasOwnProperty.call(db, key) ? db[key] : null;
-  res.json(valor === null ? null : { key, value: valor });
-});
-
-app.post('/api/kv/set', checkApiKey, (req, res) => {
-  const { key, value } = req.body || {};
-  if (!key) return res.status(400).json({ erro: 'key é obrigatório.' });
-  db[key] = value;
-  salvarDb();
-  res.json({ key, value });
-});
-
-app.post('/api/kv/delete', checkApiKey, (req, res) => {
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ erro: 'key é obrigatório.' });
-  delete db[key];
-  salvarDb();
-  res.json({ key, deleted: true });
-});
-
-app.post('/api/kv/list', checkApiKey, (req, res) => {
-  const { prefix } = req.body || {};
-  const keys = Object.keys(db).filter(k => !prefix || k.startsWith(prefix));
-  res.json({ keys });
-});
-
-const twilioClient =
-  process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    : null;
-
-const mailer =
-  process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
-    ? nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
-      })
-    : null;
-
-async function enviarWhatsapp(paraNumero, texto) {
-  if (!twilioClient) return { enviado: false, erro: 'Twilio não configurado no servidor.' };
-  if (!paraNumero) return { enviado: false, erro: 'Número de destino não informado.' };
-  try {
-    let numero = paraNumero.replace(/[^\d+]/g, '');
-    if (!numero.startsWith('+')) numero = '+55' + numero; // assume Brasil se não vier com DDI
-    await twilioClient.messages.create({
-      from: process.env.TWILIO_WHATSAPP_FROM,
-      to: 'whatsapp:' + numero,
-      body: texto
+window.storage = {
+  async get(key){
+    const resp = await fetch(backendConfig.url.replace(/\/+$/,'') + '/api/kv/get', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': backendConfig.apiKey },
+      body: JSON.stringify({ key })
     });
-    return { enviado: true };
-  } catch (e) {
-    return { enviado: false, erro: e.message };
+    if(!resp.ok) throw new Error('Falha ao ler do servidor (HTTP '+resp.status+').');
+    return await resp.json();
+  },
+  async set(key, value){
+    const resp = await fetch(backendConfig.url.replace(/\/+$/,'') + '/api/kv/set', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': backendConfig.apiKey },
+      body: JSON.stringify({ key, value })
+    });
+    if(!resp.ok) throw new Error('Falha ao gravar no servidor (HTTP '+resp.status+').');
+    return await resp.json();
+  },
+  async delete(key){
+    const resp = await fetch(backendConfig.url.replace(/\/+$/,'') + '/api/kv/delete', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': backendConfig.apiKey },
+      body: JSON.stringify({ key })
+    });
+    if(!resp.ok) throw new Error('Falha ao apagar no servidor (HTTP '+resp.status+').');
+    return await resp.json();
+  },
+  async list(prefix){
+    const resp = await fetch(backendConfig.url.replace(/\/+$/,'') + '/api/kv/list', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': backendConfig.apiKey },
+      body: JSON.stringify({ prefix })
+    });
+    if(!resp.ok) throw new Error('Falha ao listar no servidor (HTTP '+resp.status+').');
+    return await resp.json();
+  }
+};
+
+/* ---------- estado ---------- */
+let view = 'morador';           // morador | sindico
+let sindicoAuth = false;
+let sindicoTab = 'inbox';       // inbox | enviar | moradores | config
+let filtroInbox = 'todas';
+let mensagemAberta = null;
+let toastMsg = null;
+let carregando = true;
+
+let messages = [];
+let residents = [];
+let visitors = [];
+let moradorTab = 'mensagem'; // mensagem | visitante
+let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
+
+function defaultConfig(){
+  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false };
+}
+let config = defaultConfig();
+
+/* ---------- multi-condomínio ---------- */
+let condoAtual = null;          // id do condomínio ativo, ou null = nenhum selecionado
+let condominios = [];           // [{id, nome, criadoEm}]
+let condoScreenState = 'landing'; // landing | masterGate | masterPanel
+let masterAuth = false;
+let masterPinValue = '';
+let novoCondoNome = '';
+let masterConfig = { pin:'admin123' };
+
+function gerarSlug(nome){
+  let s = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-+|-+$)/g,'');
+  if(!s) s = 'condominio';
+  return s + '-' + Math.random().toString(36).slice(2,6);
+}
+function condoInfo(id){ return condominios.find(c=>c.id===id); }
+
+async function loadCondominios(){
+  try{
+    const r = await window.storage.get('condominios:list', true);
+    condominios = r ? JSON.parse(r.value) : [];
+  }catch(e){ condominios = []; }
+}
+async function saveCondominios(){
+  await window.storage.set('condominios:list', JSON.stringify(condominios), true);
+}
+async function loadMasterConfig(){
+  try{
+    const r = await window.storage.get('master:config', true);
+    if(r) masterConfig = {...masterConfig, ...JSON.parse(r.value)};
+  }catch(e){}
+}
+async function saveMasterConfig(){
+  await window.storage.set('master:config', JSON.stringify(masterConfig), true);
+}
+
+function resetSessionState(){
+  view='morador'; sindicoAuth=false; sindicoTab='inbox'; filtroInbox='todas'; mensagemAberta=null;
+  moradorAuth=null; gateUnidade=''; gateCodigo=''; moradorTab='mensagem'; pinValue='';
+  formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
+  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+  visitanteFiltro='todos';
+  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
+  novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+}
+
+async function initApp(){
+  await loadCondominios();
+  await loadMasterConfig();
+  const params = new URLSearchParams(window.location.search);
+  const condoParam = params.get('condo');
+  if(condoParam && condominios.some(c=>c.id===condoParam)){
+    condoAtual = condoParam;
+    await loadCondoData(condoAtual);
+  } else {
+    carregando = false;
+    render();
   }
 }
 
-async function enviarEmail(paraEmail, assunto, texto, anexo) {
-  if (!mailer) return { enviado: false, erro: 'E-mail não configurado no servidor.' };
-  if (!paraEmail) return { enviado: false, erro: 'E-mail de destino não informado.' };
-  try {
-    const opts = {
-      from: process.env.GMAIL_USER,
-      to: paraEmail,
-      subject: assunto || 'Portal do condomínio',
-      text: texto
-    };
-    if (anexo && anexo.dataUrl) {
-      const match = /^data:(.+);base64,(.+)$/.exec(anexo.dataUrl);
-      if (match) {
-        opts.attachments = [{
-          filename: anexo.nome || 'anexo',
-          content: Buffer.from(match[2], 'base64'),
-          contentType: match[1]
-        }];
+function baseUrl(){
+  try{
+    if(window.location.protocol === 'about:' || window.location.href.indexOf('srcdoc')!==-1){
+      return null; // pré-visualização em sandbox (ex: artefato do Claude) — sem URL real e navegável
+    }
+    return window.location.origin + window.location.pathname;
+  }catch(e){ return null; }
+}
+function safeReplaceState(url){
+  try{ window.history.replaceState({}, '', url); }catch(e){ /* ambiente em sandbox não permite trocar a URL — segue sem quebrar o app */ }
+}
+
+async function entrarNoCondo(id){
+  condoAtual = id;
+  resetSessionState();
+  carregando = true;
+  render();
+  const base = baseUrl();
+  if(base) safeReplaceState(base + '?condo=' + id);
+  await loadCondoData(id);
+}
+
+function sairDoCondo(){
+  condoAtual = null;
+  condoScreenState = 'landing';
+  resetSessionState();
+  const base = baseUrl();
+  if(base) safeReplaceState(base);
+  render();
+}
+
+/* ---------- storage helpers (escopados por condomínio) ---------- */
+async function loadCondoData(condoId){
+  config = defaultConfig();
+  try{
+    const r = await window.storage.get('config:'+condoId, true);
+    if(r) config = {...config, ...JSON.parse(r.value)};
+  }catch(e){}
+  try{
+    const r = await window.storage.get('residents:'+condoId, true);
+    residents = r ? JSON.parse(r.value) : [];
+  }catch(e){ residents = []; }
+  try{
+    const list = await window.storage.list('messages:'+condoId+':', true);
+    const items = [];
+    if(list && list.keys){
+      for(const k of list.keys){
+        try{
+          const v = await window.storage.get(k, true);
+          if(v) items.push(JSON.parse(v.value));
+        }catch(e){}
       }
     }
-    await mailer.sendMail(opts);
-    return { enviado: true };
-  } catch (e) {
-    return { enviado: false, erro: e.message };
+    items.sort((a,b)=> b.criadoEm - a.criadoEm);
+    messages = items;
+  }catch(e){ messages = []; }
+  try{
+    const list = await window.storage.list('visitors:'+condoId+':', true);
+    const items = [];
+    if(list && list.keys){
+      for(const k of list.keys){
+        try{
+          const v = await window.storage.get(k, true);
+          if(v) items.push(JSON.parse(v.value));
+        }catch(e){}
+      }
+    }
+    items.sort((a,b)=> b.criadoEm - a.criadoEm);
+    visitors = items;
+  }catch(e){ visitors = []; }
+  carregando = false;
+  render();
+}
+
+async function saveConfig(){
+  await window.storage.set('config:'+condoAtual, JSON.stringify(config), true);
+}
+async function saveResidents(){
+  await window.storage.set('residents:'+condoAtual, JSON.stringify(residents), true);
+}
+async function saveMessage(msg){
+  await window.storage.set('messages:'+condoAtual+':'+msg.id, JSON.stringify(msg), true);
+}
+async function saveVisitor(v){
+  await window.storage.set('visitors:'+condoAtual+':'+v.id, JSON.stringify(v), true);
+}
+
+/* ---------- backend de envio real (WhatsApp/e-mail) ---------- */
+async function chamarBackend(caminho, corpo){
+  if(!backendConfig) return { erro:'backend_nao_configurado' };
+  try{
+    const resp = await fetch(backendConfig.url.replace(/\/+$/,'') + caminho, {
+      method:'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key': backendConfig.apiKey||'' },
+      body: JSON.stringify(corpo)
+    });
+    let dados = null;
+    try{ dados = await resp.json(); }catch(e){}
+    if(!resp.ok) return { erro: (dados && dados.erro) || ('HTTP '+resp.status) };
+    return dados || {};
+  }catch(e){
+    return { erro: e.message };
   }
 }
 
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', servico: 'backend do portal do condomínio' });
-});
+function showToast(t){
+  toastMsg = t;
+  render();
+  setTimeout(()=>{ toastMsg=null; render(); }, 3200);
+}
 
-// Notifica o síndico (usado quando um morador envia mensagem ou cadastra visitante)
-app.post('/api/notificar-sindico', checkApiKey, async (req, res) => {
-  const { canalWhatsapp, canalEmail, whatsappPara, emailPara, assunto, mensagem, anexo } = req.body || {};
-  if (!mensagem) return res.status(400).json({ erro: 'Campo "mensagem" é obrigatório.' });
-  const resultado = {};
-  if (canalWhatsapp) resultado.whatsapp = await enviarWhatsapp(whatsappPara, mensagem);
-  if (canalEmail) resultado.email = await enviarEmail(emailPara, assunto, mensagem, anexo);
-  res.json(resultado);
-});
+/* ---------- utilidades ---------- */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function iniciais(nome){
+  const palavras = nome.trim().split(/\s+/).filter(Boolean);
+  if(palavras.length===0) return 'PC';
+  if(palavras.length===1) return palavras[0].slice(0,2).toUpperCase();
+  return (palavras[0][0]+palavras[1][0]).toUpperCase();
+}
+function fmtData(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
 
-// Envia um comunicado do síndico para uma lista de moradores selecionados
-app.post('/api/enviar-broadcast', checkApiKey, async (req, res) => {
-  const { mensagem, canalWhatsapp, canalEmail, destinatarios, assunto } = req.body || {};
-  if (!mensagem) return res.status(400).json({ erro: 'Campo "mensagem" é obrigatório.' });
-  if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
-    return res.status(400).json({ erro: 'Lista de destinatários vazia ou inválida.' });
+/* ---------- máscaras e validação de documentos ---------- */
+function maskData(v){
+  v = v.replace(/\D/g,'').slice(0,8);
+  if(v.length>4) v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, '$1/$2/$3');
+  else if(v.length>2) v = v.replace(/^(\d{2})(\d{0,2}).*/, '$1/$2');
+  return v;
+}
+function maskHora(v){
+  v = v.replace(/\D/g,'').slice(0,4);
+  if(v.length>2) v = v.replace(/^(\d{2})(\d{0,2}).*/, '$1:$2');
+  return v;
+}
+function maskCPF(v){
+  v = v.replace(/\D/g,'').slice(0,11);
+  v = v.replace(/^(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
+  v = v.replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+  return v;
+}
+function maskRG(v){
+  v = v.replace(/\D/g,'').slice(0,9);
+  v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+  v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+  v = v.replace(/\.(\d{3})(\d{1})$/, '.$1-$2');
+  return v;
+}
+function validaCPF(valor){
+  const cpf = (valor||'').replace(/\D/g,'');
+  if(cpf.length!==11) return false;
+  if(/^(\d)\1{10}$/.test(cpf)) return false;
+  let soma=0;
+  for(let i=0;i<9;i++) soma += parseInt(cpf[i],10)*(10-i);
+  let resto = (soma*10)%11;
+  if(resto===10||resto===11) resto=0;
+  if(resto!==parseInt(cpf[9],10)) return false;
+  soma=0;
+  for(let i=0;i<10;i++) soma += parseInt(cpf[i],10)*(11-i);
+  resto = (soma*10)%11;
+  if(resto===10||resto===11) resto=0;
+  if(resto!==parseInt(cpf[10],10)) return false;
+  return true;
+}
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=> res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+function getVideoDuration(file){
+  return new Promise((res)=>{
+    const v = document.createElement('video');
+    v.preload='metadata';
+    v.onloadedmetadata = ()=>{ URL.revokeObjectURL(v.src); res(v.duration); };
+    v.onerror = ()=> res(null);
+    v.src = URL.createObjectURL(file);
+  });
+}
+
+/* ---------- render raiz ---------- */
+function render(){
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  if(condoAtual===null){
+    app.appendChild(renderSemCondo());
+    if(toastMsg){
+      const t = document.createElement('div');
+      t.className='toast';
+      t.textContent = toastMsg;
+      app.appendChild(t);
+    }
+    return;
   }
-  const resultados = [];
-  for (const d of destinatarios) {
-    const item = { nome: d.nome };
-    if (canalWhatsapp) item.whatsapp = await enviarWhatsapp(d.whatsapp, mensagem);
-    if (canalEmail) item.email = await enviarEmail(d.email, assunto, mensagem);
-    resultados.push(item);
-  }
-  res.json({ resultados });
-});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Servidor rodando na porta ' + PORT));
+  app.appendChild(renderHeader());
+  if(carregando){
+    const d = document.createElement('div');
+    d.className='empty';
+    d.textContent='Carregando...';
+    app.appendChild(d);
+  } else if(view==='morador'){
+    app.appendChild(renderMorador());
+  } else {
+    app.appendChild(sindicoAuth ? renderSindico() : renderPinGate());
+  }
+  if(toastMsg){
+    const t = document.createElement('div');
+    t.className='toast';
+    t.textContent = toastMsg;
+    app.appendChild(t);
+  }
+}
+
+function renderHeader(){
+  const h = document.createElement('header');
+  h.className='top';
+  const info = condoInfo(condoAtual);
+  const nomeExibido = (config.nomeCondominio && config.nomeCondominio.trim()) ? config.nomeCondominio.trim() : (info ? info.nome : 'Portal do Condomínio');
+  document.title = nomeExibido;
+  const brand = document.createElement('div');
+  brand.className='brand';
+  brand.innerHTML = `
+      <div class="mark">${iniciais(nomeExibido)}</div>
+      <div><h1>${escapeHtml(nomeExibido)}</h1><p>Comunicação entre moradores e síndico</p></div>
+  `;
+  h.appendChild(brand);
+  const nav = document.createElement('nav');
+  nav.className='switch';
+  const b1 = document.createElement('button');
+  b1.textContent='Sou morador';
+  b1.className = view==='morador' ? 'active' : '';
+  b1.onclick = ()=>{ view='morador'; render(); };
+  const b2 = document.createElement('button');
+  b2.textContent='Painel do síndico';
+  b2.className = view==='sindico' ? 'active' : '';
+  b2.onclick = ()=>{ view='sindico'; render(); };
+  nav.appendChild(b1); nav.appendChild(b2);
+  h.appendChild(nav);
+  const trocar = document.createElement('button');
+  trocar.className='icon-btn'; trocar.style.color='var(--muted)'; trocar.style.fontSize='12px';
+  trocar.textContent='Trocar condomínio';
+  trocar.onclick = sairDoCondo;
+  h.appendChild(trocar);
+  return h;
+}
+
+/* ---------- seleção de condomínio ---------- */
+function renderSemCondo(){
+  const wrap = document.createElement('div');
+  wrap.style.marginTop='40px';
+  if(condoScreenState==='masterPanel' && masterAuth){
+    wrap.appendChild(renderMasterPanel());
+    return wrap;
+  }
+  if(condoScreenState==='masterGate'){
+    wrap.appendChild(renderMasterGate());
+    return wrap;
+  }
+  const card = document.createElement('div');
+  card.className='card pin-gate';
+  card.innerHTML = `<h2>Portal do condomínio</h2><p class="lead">Este link não está associado a um condomínio específico. Se você é morador ou síndico, peça o link correto para a administração.</p>`;
+  const btn = document.createElement('button');
+  btn.className='btn btn-ghost';
+  btn.textContent='Área do administrador';
+  btn.onclick = ()=>{ condoScreenState='masterGate'; render(); };
+  card.appendChild(btn);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderMasterGate(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card pin-gate';
+  card.innerHTML = `<h2>Área do administrador</h2><p class="lead">Digite a senha de administrador para gerenciar os condomínios.</p>`;
+  const inp = document.createElement('input');
+  inp.type='password'; inp.placeholder='Senha de administrador'; inp.value=masterPinValue;
+  inp.oninput = e=> masterPinValue = e.target.value;
+  inp.onkeydown = e=>{ if(e.key==='Enter') tryEntrar(); };
+  function tryEntrar(){
+    if(masterPinValue === masterConfig.pin){ masterAuth=true; condoScreenState='masterPanel'; masterPinValue=''; render(); }
+    else showToast('Senha incorreta.');
+  }
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary'; btn.style.marginTop='12px'; btn.textContent='Entrar';
+  btn.onclick = tryEntrar;
+  card.appendChild(inp); card.appendChild(btn);
+  const hint = document.createElement('p'); hint.className='lead'; hint.style.marginTop='10px'; hint.style.fontSize='12px';
+  hint.textContent = 'Senha padrão: admin123 (altere depois de entrar).';
+  card.appendChild(hint);
+  const back = document.createElement('button');
+  back.className='btn btn-ghost'; back.style.marginTop='4px'; back.textContent='Voltar';
+  back.onclick = ()=>{ condoScreenState='landing'; render(); };
+  card.appendChild(back);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderMasterPanel(){
+  const wrap = document.createElement('div');
+  const topBar = document.createElement('div');
+  topBar.style.display='flex'; topBar.style.justifyContent='space-between'; topBar.style.alignItems='center'; topBar.style.marginBottom='16px';
+  const h2 = document.createElement('h2'); h2.style.margin='0'; h2.textContent='Administrar condomínios';
+  const sair = document.createElement('button');
+  sair.className='btn btn-ghost'; sair.textContent='Sair';
+  sair.onclick = ()=>{ masterAuth=false; condoScreenState='landing'; render(); };
+  topBar.appendChild(h2); topBar.appendChild(sair);
+  wrap.appendChild(topBar);
+
+  const newCard = document.createElement('div');
+  newCard.className='card';
+  newCard.innerHTML = `<h2>Novo condomínio</h2>`;
+  const nameField = field('Nome do condomínio', null);
+  const nameInput = document.createElement('input');
+  nameInput.type='text'; nameInput.value=novoCondoNome; nameInput.placeholder='Ex: Residencial das Palmeiras';
+  nameInput.oninput = e=> novoCondoNome = e.target.value;
+  nameField.appendChild(nameInput);
+  newCard.appendChild(nameField);
+  const createBtn = document.createElement('button');
+  createBtn.className='btn btn-primary'; createBtn.textContent='Criar condomínio';
+  createBtn.onclick = async ()=>{
+    if(!novoCondoNome.trim()){ showToast('Informe o nome do condomínio.'); return; }
+    const novo = { id: gerarSlug(novoCondoNome), nome: novoCondoNome.trim(), criadoEm: Date.now() };
+    condominios.push(novo);
+    await saveCondominios();
+    novoCondoNome='';
+    showToast('Condomínio criado.');
+    render();
+  };
+  newCard.appendChild(createBtn);
+  wrap.appendChild(newCard);
+
+  const masterPinCard = document.createElement('div');
+  masterPinCard.className='card';
+  masterPinCard.innerHTML = `<h2>Senha de administrador</h2>`;
+  const mpField = field('Senha', null);
+  const mpInput = document.createElement('input');
+  mpInput.type='text'; mpInput.value=masterConfig.pin;
+  mpInput.oninput = e=> masterConfig.pin = e.target.value;
+  mpField.appendChild(mpInput);
+  masterPinCard.appendChild(mpField);
+  const mpBtn = document.createElement('button');
+  mpBtn.className='btn btn-ghost'; mpBtn.textContent='Salvar senha';
+  mpBtn.onclick = async ()=>{ await saveMasterConfig(); showToast('Senha de administrador atualizada.'); };
+  masterPinCard.appendChild(mpBtn);
+  wrap.appendChild(masterPinCard);
+
+  const listCard = document.createElement('div');
+  listCard.className='card';
+  listCard.innerHTML = `<h2>Condomínios cadastrados</h2>`;
+  if(condominios.length===0){
+    const e = document.createElement('div'); e.className='empty'; e.textContent='Nenhum condomínio cadastrado ainda.';
+    listCard.appendChild(e);
+  } else {
+    condominios.forEach(c=>{
+      const row = document.createElement('div');
+      row.style.padding='12px 0'; row.style.borderBottom='1px solid var(--line)';
+      row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.gap='12px'; row.style.flexWrap='wrap';
+      const base = baseUrl();
+      const link = base ? (base + '?condo=' + c.id) : null;
+      const info = document.createElement('div');
+      info.innerHTML = link
+        ? `<div style="font-weight:650;font-size:13.5px">${escapeHtml(c.nome)}</div><div class="meta" style="font-size:11.5px;word-break:break-all">${escapeHtml(link)}</div>`
+        : `<div style="font-weight:650;font-size:13.5px">${escapeHtml(c.nome)}</div><div class="meta" style="font-size:11.5px">Código: <strong>${escapeHtml(c.id)}</strong> — abra o arquivo publicado fora desta pré-visualização para gerar o link completo (acrescente <code>?condo=${escapeHtml(c.id)}</code> ao endereço onde ele estiver hospedado).</div>`;
+      const actions = document.createElement('div');
+      actions.style.display='flex'; actions.style.gap='8px'; actions.style.flexWrap='wrap';
+      const copyBtn = document.createElement('button');
+      copyBtn.className='btn btn-ghost'; copyBtn.textContent = link ? 'Copiar link' : 'Copiar código';
+      copyBtn.onclick = ()=>{
+        const texto = link || c.id;
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(texto).then(()=> showToast((link?'Link':'Código')+' copiado.')).catch(()=> showToast(texto));
+        } else { showToast(texto); }
+      };
+      const enterBtn = document.createElement('button');
+      enterBtn.className='btn btn-ghost'; enterBtn.textContent='Acessar';
+      enterBtn.onclick = ()=> entrarNoCondo(c.id);
+      const rmBtn = document.createElement('button');
+      rmBtn.className='btn btn-danger'; rmBtn.textContent='Remover da lista';
+      rmBtn.onclick = async ()=>{
+        condominios = condominios.filter(x=>x.id!==c.id);
+        await saveCondominios();
+        render();
+      };
+      actions.appendChild(copyBtn); actions.appendChild(enterBtn); actions.appendChild(rmBtn);
+      row.appendChild(info); row.appendChild(actions);
+      listCard.appendChild(row);
+    });
+  }
+  wrap.appendChild(listCard);
+
+  const warn = document.createElement('div');
+  warn.className='warn';
+  warn.textContent = 'Remover um condomínio desta lista só o esconde daqui — os dados dele (moradores, mensagens, visitantes) continuam guardados e ele pode ser recriado com o mesmo link se precisar recuperar o acesso.';
+  wrap.appendChild(warn);
+
+  return wrap;
+}
+
+/* ================= PORTAL DO MORADOR ================= */
+let formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
+let moradorAuth = null; // { unidade, nomeSugerido }
+let gateUnidade = '';
+let gateCodigo = '';
+
+function normaliza(s){ return (s||'').trim().toLowerCase(); }
+
+function renderMorador(){
+  if(!moradorAuth){
+    return renderMoradorGate();
+  }
+  const outer = document.createElement('div');
+
+  const info = document.createElement('div');
+  info.style.display='flex'; info.style.justifyContent='space-between'; info.style.alignItems='center';
+  info.style.marginBottom='14px'; info.style.fontSize='13px'; info.style.color='var(--ink-soft)';
+  const left = document.createElement('span');
+  left.textContent = 'Acesso liberado para a unidade: ' + moradorAuth.unidade;
+  const sair = document.createElement('button');
+  sair.className='icon-btn'; sair.style.color='var(--ink-soft)'; sair.textContent='Sair';
+  sair.onclick = ()=>{
+    moradorAuth = null; gateUnidade=''; gateCodigo='';
+    formState.unidade=''; visitorFormState.unidade='';
+    render();
+  };
+  info.appendChild(left); info.appendChild(sair);
+  outer.appendChild(info);
+
+  const subtabs = document.createElement('div');
+  subtabs.className='subtabs';
+  [['mensagem','Enviar mensagem'],['visitante','Cadastrar visitante']].forEach(([k,l])=>{
+    const b = document.createElement('button');
+    b.textContent = l;
+    b.className = moradorTab===k ? 'active' : '';
+    b.onclick = ()=>{ moradorTab=k; render(); };
+    subtabs.appendChild(b);
+  });
+  outer.appendChild(subtabs);
+  outer.appendChild(moradorTab==='mensagem' ? renderMensagemForm() : renderVisitanteForm());
+  return outer;
+}
+
+function renderMoradorGate(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card pin-gate';
+  card.innerHTML = `<h2>Acesso da unidade</h2><p class="lead">Digite a unidade e o código de acesso fornecido pelo síndico.</p>`;
+
+  const uField = field('Unidade', null);
+  const uInput = document.createElement('input');
+  uInput.type='text'; uInput.placeholder='Ex: Bloco B, apto 302'; uInput.value=gateUnidade;
+  uInput.oninput = e=> gateUnidade = e.target.value;
+  uField.appendChild(uInput);
+  card.appendChild(uField);
+
+  const cField = field('Código de acesso', null);
+  const cInput = document.createElement('input');
+  cInput.type='text'; cInput.placeholder='Código da sua unidade'; cInput.value=gateCodigo;
+  cInput.oninput = e=> gateCodigo = e.target.value;
+  cInput.onkeydown = e=>{ if(e.key==='Enter') tryEntrar(); };
+  cField.appendChild(cInput);
+  card.appendChild(cField);
+
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary';
+  btn.textContent='Entrar';
+  btn.onclick = tryEntrar;
+  card.appendChild(btn);
+
+  function tryEntrar(){
+    if(!gateUnidade.trim() || !gateCodigo.trim()){ showToast('Preencha unidade e código.'); return; }
+    const match = residents.find(r => normaliza(r.unidade)===normaliza(gateUnidade) && normaliza(r.codigo)===normaliza(gateCodigo));
+    if(!match){ showToast('Unidade ou código incorretos. Fale com o síndico.'); return; }
+    moradorAuth = { unidade: match.unidade, nomeSugerido: match.nome };
+    formState.unidade = match.unidade;
+    visitorFormState.unidade = match.unidade;
+    visitorFormState.nomeMorador = match.nome;
+    gateUnidade=''; gateCodigo='';
+    render();
+  }
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderMensagemForm(){
+  const wrap = document.createElement('div');
+
+  if(formState.enviado){
+    const c = document.createElement('div');
+    c.className='card success-box';
+    c.innerHTML = `
+      <div class="check">✓</div>
+      <h2>Mensagem enviada</h2>
+      <p class="lead" style="margin-top:6px">O síndico foi notificado e vai analisar sua mensagem.</p>
+    `;
+    const btn = document.createElement('button');
+    btn.className='btn btn-ghost';
+    btn.textContent='Enviar outra mensagem';
+    btn.onclick = ()=>{ formState = { nome:'', unidade: moradorAuth ? moradorAuth.unidade : '', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false }; render(); };
+    c.appendChild(btn);
+    wrap.appendChild(c);
+    return wrap;
+  }
+
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Fale com o síndico</h2><p class="lead">Envie reclamações, sugestões ou elogios. Sua mensagem chega diretamente à administração.</p>`;
+
+  const row2 = document.createElement('div');
+  row2.className='row2';
+  row2.appendChild(field('Nome completo', textInput(formState.nome, v=>formState.nome=v, 'Ex: Ana Ferreira')));
+  row2.appendChild(field('Unidade (bloco/apto)', lockedInput(formState.unidade)));
+  card.appendChild(row2);
+
+  const tipoField = field('Tipo de mensagem', null);
+  const sel = document.createElement('select');
+  [['reclamacao','Reclamação'],['sugestao','Sugestão'],['elogio','Elogio']].forEach(([v,l])=>{
+    const o = document.createElement('option'); o.value=v; o.textContent=l;
+    if(formState.tipo===v) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = e=>{ formState.tipo = e.target.value; };
+  tipoField.appendChild(sel);
+  card.appendChild(tipoField);
+
+  const msgField = field('Mensagem', null);
+  const ta = document.createElement('textarea');
+  ta.placeholder = 'Descreva sua reclamação, sugestão ou elogio...';
+  ta.value = formState.mensagem;
+  ta.oninput = e=>{ formState.mensagem = e.target.value; };
+  msgField.appendChild(ta);
+  card.appendChild(msgField);
+
+  // imagem
+  const imgField = field('Foto (opcional)', null);
+  const imgBox = document.createElement('div');
+  imgBox.className = 'filebox' + (formState.imagemData ? ' has' : '');
+  imgBox.textContent = formState.imagemData ? ('Anexado: '+formState.imagemNome) : 'Nenhuma foto selecionada';
+  const imgInput = document.createElement('input');
+  imgInput.type='file'; imgInput.accept='image/*'; imgInput.style.marginTop='8px'; imgInput.style.display='block';
+  imgInput.onchange = async e=>{
+    const f = e.target.files[0]; if(!f) return;
+    if(f.size > 4*1024*1024){ showToast('Imagem muito grande (máx. 4MB).'); e.target.value=''; return; }
+    formState.imagemData = await fileToBase64(f);
+    formState.imagemNome = f.name;
+    render();
+  };
+  imgField.appendChild(imgBox);
+  imgField.appendChild(imgInput);
+  card.appendChild(imgField);
+
+  // video
+  const vidField = field('Vídeo — até 20 segundos (opcional)', null);
+  const vidBox = document.createElement('div');
+  vidBox.className = 'filebox' + (formState.videoData ? ' has' : '');
+  vidBox.textContent = formState.videoData ? ('Anexado: '+formState.videoNome) : 'Nenhum vídeo selecionado';
+  const vidInput = document.createElement('input');
+  vidInput.type='file'; vidInput.accept='video/*'; vidInput.style.marginTop='8px'; vidInput.style.display='block';
+  vidInput.onchange = async e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const dur = await getVideoDuration(f);
+    if(dur && dur > 20.5){ showToast('O vídeo tem '+Math.round(dur)+'s. O limite é 20 segundos.'); e.target.value=''; return; }
+    if(f.size > 4.5*1024*1024){ showToast('Vídeo muito grande para envio (máx. ~4.5MB). Tente um vídeo mais curto ou de menor resolução.'); e.target.value=''; return; }
+    formState.videoData = await fileToBase64(f);
+    formState.videoNome = f.name;
+    render();
+  };
+  vidField.appendChild(vidBox);
+  vidField.appendChild(vidInput);
+  card.appendChild(vidField);
+
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary';
+  btn.textContent = formState.enviando ? 'Enviando...' : 'Enviar mensagem';
+  btn.disabled = formState.enviando;
+  btn.onclick = async ()=>{
+    if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
+      showToast('Preencha nome, unidade e mensagem.'); return;
+    }
+    formState.enviando = true; render();
+    const msg = {
+      id: uid(),
+      nome: formState.nome.trim(),
+      unidade: formState.unidade.trim(),
+      tipo: formState.tipo,
+      texto: formState.mensagem.trim(),
+      imagemData: formState.imagemData,
+      videoData: formState.videoData,
+      criadoEm: Date.now(),
+      lida: false,
+      resolvida: false
+    };
+    try{
+      await saveMessage(msg);
+      messages.unshift(msg);
+      formState.enviado = true;
+      if(backendConfig){
+        chamarBackend('/api/notificar-sindico', {
+          canalWhatsapp: config.whatsappAtivo,
+          canalEmail: config.emailAtivo,
+          whatsappPara: config.whatsappNumero,
+          emailPara: config.emailEndereco,
+          assunto: 'Nova ' + labelTipo(msg.tipo).toLowerCase() + ' — ' + msg.unidade,
+          mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto
+        });
+      }
+    }catch(e){
+      showToast('Não foi possível enviar agora. Tente novamente.');
+    }
+    formState.enviando = false;
+    render();
+  };
+  card.appendChild(btn);
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+
+function renderVisitanteForm(){
+  const wrap = document.createElement('div');
+
+  if(visitorFormState.enviado){
+    const c = document.createElement('div');
+    c.className='card success-box';
+    c.innerHTML = `
+      <div class="check">✓</div>
+      <h2>Cadastro enviado</h2>
+      <p class="lead" style="margin-top:6px">${config.aprovacaoObrigatoria ? 'A entrada aguarda aprovação do síndico.' : 'O síndico e a portaria já podem consultar este cadastro.'}</p>
+    `;
+    const btn = document.createElement('button');
+    btn.className='btn btn-ghost';
+    btn.textContent='Cadastrar outro visitante';
+    btn.onclick = ()=>{ visitorFormState = { nomeMorador: moradorAuth ? moradorAuth.nomeSugerido : '', unidade: moradorAuth ? moradorAuth.unidade : '', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false }; render(); };
+    c.appendChild(btn);
+    wrap.appendChild(c);
+    return wrap;
+  }
+
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Cadastrar visitante ou prestador de serviço</h2><p class="lead">Informe os dados de quem vai visitar sua unidade. ${config.aprovacaoObrigatoria ? 'O síndico precisa aprovar antes da entrada.' : 'O síndico pode aprovar ou reprovar o cadastro, mas isso é opcional.'}</p>`;
+
+  const row1 = document.createElement('div');
+  row1.className='row2';
+  row1.appendChild(field('Seu nome (morador)', textInput(visitorFormState.nomeMorador, v=>visitorFormState.nomeMorador=v, 'Ex: Ana Ferreira')));
+  row1.appendChild(field('Unidade', lockedInput(visitorFormState.unidade)));
+  card.appendChild(row1);
+
+  const row2 = document.createElement('div');
+  row2.className='row2';
+  row2.appendChild(field('Nome do visitante/prestador', textInput(visitorFormState.nomeVisitante, v=>visitorFormState.nomeVisitante=v, 'Nome completo')));
+  card.appendChild(row2);
+
+  const rowDoc = document.createElement('div');
+  rowDoc.className='row2';
+
+  const cpfWrap = document.createElement('div'); cpfWrap.className='field';
+  const cpfLabel = document.createElement('label'); cpfLabel.textContent='CPF';
+  cpfWrap.appendChild(cpfLabel);
+  const cpfInput = document.createElement('input');
+  cpfInput.type='text'; cpfInput.inputMode='numeric'; cpfInput.placeholder='000.000.000-00'; cpfInput.value=visitorFormState.cpf;
+  const cpfFeedback = document.createElement('div');
+  cpfFeedback.style.fontSize='12px'; cpfFeedback.style.marginTop='5px'; cpfFeedback.style.minHeight='14px';
+  function atualizaCpfFeedback(){
+    const digitos = visitorFormState.cpf.replace(/\D/g,'');
+    if(digitos.length===0){ cpfFeedback.textContent=''; }
+    else if(digitos.length<11){ cpfFeedback.textContent='Faltam dígitos'; cpfFeedback.style.color='var(--muted)'; }
+    else if(validaCPF(visitorFormState.cpf)){ cpfFeedback.textContent='✓ CPF válido'; cpfFeedback.style.color='var(--leaf)'; }
+    else { cpfFeedback.textContent='✕ CPF inválido — confira o número'; cpfFeedback.style.color='var(--brick)'; }
+  }
+  cpfInput.oninput = e=>{
+    const masked = maskCPF(e.target.value);
+    e.target.value = masked;
+    visitorFormState.cpf = masked;
+    atualizaCpfFeedback();
+  };
+  atualizaCpfFeedback();
+  cpfWrap.appendChild(cpfInput); cpfWrap.appendChild(cpfFeedback);
+
+  const rgWrap = document.createElement('div'); rgWrap.className='field';
+  const rgLabel = document.createElement('label'); rgLabel.textContent='RG';
+  rgWrap.appendChild(rgLabel);
+  const rgInput = document.createElement('input');
+  rgInput.type='text'; rgInput.inputMode='numeric'; rgInput.placeholder='00.000.000-0'; rgInput.value=visitorFormState.rg;
+  rgInput.oninput = e=>{
+    const masked = maskRG(e.target.value);
+    e.target.value = masked;
+    visitorFormState.rg = masked;
+  };
+  rgWrap.appendChild(rgInput);
+
+  rowDoc.appendChild(cpfWrap); rowDoc.appendChild(rgWrap);
+  card.appendChild(rowDoc);
+  const docHint = document.createElement('p');
+  docHint.className='lead'; docHint.style.fontSize='12px'; docHint.style.margin='-10px 0 16px';
+  docHint.textContent = 'Preencha pelo menos um dos dois documentos.';
+  card.appendChild(docHint);
+
+  const grauField = field('Grau da visita', null);
+  const sel = document.createElement('select');
+  [['visitante','Visitante'],['prestador','Prestador de serviço'],['entrega','Entrega'],['familiar','Familiar'],['outro','Outro']].forEach(([v,l])=>{
+    const o = document.createElement('option'); o.value=v; o.textContent=l;
+    if(visitorFormState.grau===v) o.selected=true;
+    sel.appendChild(o);
+  });
+  sel.onchange = e=>{ visitorFormState.grau = e.target.value; };
+  grauField.appendChild(sel);
+  card.appendChild(grauField);
+
+  const row3 = document.createElement('div');
+  row3.className='row2';
+  const dataField = field('Data da visita', null);
+  const dataInput = document.createElement('input');
+  dataInput.type='text'; dataInput.inputMode='numeric'; dataInput.placeholder='dd/mm/aaaa'; dataInput.value=visitorFormState.data;
+  dataInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.data = m; };
+  dataField.appendChild(dataInput);
+  row3.appendChild(dataField);
+  card.appendChild(row3);
+
+  const row4 = document.createElement('div');
+  row4.className='row2';
+  const entradaField = field('Horário de entrada', null);
+  const entradaInput = document.createElement('input');
+  entradaInput.type='text'; entradaInput.inputMode='numeric'; entradaInput.placeholder='14:00'; entradaInput.value=visitorFormState.entrada;
+  entradaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.entrada = m; };
+  entradaField.appendChild(entradaInput);
+  const saidaField = field('Horário de saída (previsto)', null);
+  const saidaInput = document.createElement('input');
+  saidaInput.type='text'; saidaInput.inputMode='numeric'; saidaInput.placeholder='18:00'; saidaInput.value=visitorFormState.saida;
+  saidaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.saida = m; };
+  saidaField.appendChild(saidaInput);
+  row4.appendChild(entradaField); row4.appendChild(saidaField);
+  card.appendChild(row4);
+
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary';
+  btn.textContent = visitorFormState.enviando ? 'Enviando...' : 'Cadastrar';
+  btn.disabled = visitorFormState.enviando;
+  btn.onclick = async ()=>{
+    if(!visitorFormState.nomeMorador.trim() || !visitorFormState.unidade.trim() || !visitorFormState.nomeVisitante.trim()){
+      showToast('Preencha seu nome, unidade e o nome do visitante.'); return;
+    }
+    const cpfDigitos = visitorFormState.cpf.replace(/\D/g,'');
+    const rgDigitos = visitorFormState.rg.replace(/\D/g,'');
+    if(!cpfDigitos && !rgDigitos){
+      showToast('Informe o CPF ou o RG do visitante.'); return;
+    }
+    if(cpfDigitos && cpfDigitos.length<11){
+      showToast('O CPF está incompleto.'); return;
+    }
+    if(cpfDigitos && cpfDigitos.length===11 && !validaCPF(visitorFormState.cpf)){
+      showToast('O CPF informado não é válido. Confira o número.'); return;
+    }
+    visitorFormState.enviando = true; render();
+    const v = {
+      id: uid(),
+      nomeMorador: visitorFormState.nomeMorador.trim(),
+      unidade: visitorFormState.unidade.trim(),
+      nomeVisitante: visitorFormState.nomeVisitante.trim(),
+      cpf: visitorFormState.cpf.trim(),
+      rg: visitorFormState.rg.trim(),
+      grau: visitorFormState.grau,
+      data: visitorFormState.data.trim(),
+      entrada: visitorFormState.entrada.trim(),
+      saida: visitorFormState.saida.trim(),
+      criadoEm: Date.now(),
+      status: 'pendente'
+    };
+    try{
+      await saveVisitor(v);
+      visitors.unshift(v);
+      visitorFormState.enviado = true;
+      if(backendConfig){
+        chamarBackend('/api/notificar-sindico', {
+          canalWhatsapp: config.whatsappAtivo,
+          canalEmail: config.emailAtivo,
+          whatsappPara: config.whatsappNumero,
+          emailPara: config.emailEndereco,
+          assunto: 'Novo visitante cadastrado — ' + v.unidade,
+          mensagem: 'Visitante: ' + v.nomeVisitante + ' (' + labelGrau(v.grau) + ') autorizado por ' + v.nomeMorador + ' — ' + v.unidade + (v.data ? ' em ' + v.data : '') + (v.entrada ? ', entrada às ' + v.entrada : '') + '.'
+        });
+      }
+    }catch(e){
+      showToast('Não foi possível cadastrar agora. Tente novamente.');
+    }
+    visitorFormState.enviando = false;
+    render();
+  };
+  card.appendChild(btn);
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function field(labelText, child){
+  const f = document.createElement('div');
+  f.className='field';
+  const l = document.createElement('label');
+  l.textContent = labelText;
+  f.appendChild(l);
+  if(child) f.appendChild(child);
+  return f;
+}
+function textInput(value, onInput, placeholder){
+  const i = document.createElement('input');
+  i.type='text'; i.value=value; i.placeholder=placeholder||'';
+  i.oninput = e=> onInput(e.target.value);
+  return i;
+}
+function lockedInput(value){
+  const i = document.createElement('input');
+  i.type='text'; i.value=value; i.readOnly=true;
+  i.style.background='#F5F6F5'; i.style.color='var(--ink-soft)';
+  return i;
+}
+
+/* ================= PIN GATE ================= */
+let pinValue = '';
+function renderPinGate(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card pin-gate';
+  card.innerHTML = `<h2>Acesso do síndico</h2><p class="lead">Digite o PIN de acesso.</p>`;
+  const inp = document.createElement('input');
+  inp.type='password'; inp.placeholder='PIN'; inp.value=pinValue;
+  inp.oninput = e=> pinValue = e.target.value;
+  inp.onkeydown = e=>{ if(e.key==='Enter') tryLogin(); };
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary'; btn.style.marginTop='12px'; btn.textContent='Entrar';
+  btn.onclick = tryLogin;
+  function tryLogin(){
+    if(pinValue === config.pin){ sindicoAuth = true; pinValue=''; render(); }
+    else showToast('PIN incorreto.');
+  }
+  card.appendChild(inp);
+  card.appendChild(btn);
+  const hint = document.createElement('p');
+  hint.className='lead'; hint.style.marginTop='10px'; hint.style.fontSize='12px';
+  hint.textContent = 'PIN padrão: 1234 (altere em Configurações após entrar).';
+  card.appendChild(hint);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ================= PAINEL DO SÍNDICO ================= */
+function renderSindico(){
+  const wrap = document.createElement('div');
+  const tabs = document.createElement('div');
+  tabs.className='tabbar';
+  [['inbox','Mensagens'],['visitantes','Visitantes'],['enviar','Enviar mensagem'],['moradores','Moradores'],['config','Configurações']].forEach(([k,l])=>{
+    const b = document.createElement('button');
+    b.textContent = l + (k==='inbox' ? countBadge() : k==='visitantes' ? countBadgeVisitantes() : '');
+    b.className = sindicoTab===k ? 'active' : '';
+    b.onclick = ()=>{ sindicoTab=k; mensagemAberta=null; render(); };
+    tabs.appendChild(b);
+  });
+  wrap.appendChild(tabs);
+
+  if(sindicoTab==='inbox') wrap.appendChild(renderInbox());
+  else if(sindicoTab==='visitantes') wrap.appendChild(renderVisitantes());
+  else if(sindicoTab==='enviar') wrap.appendChild(renderEnviar());
+  else if(sindicoTab==='moradores') wrap.appendChild(renderMoradores());
+  else wrap.appendChild(renderConfig());
+
+  return wrap;
+}
+function countBadge(){
+  const n = messages.filter(m=>!m.lida).length;
+  return n>0 ? ' ('+n+')' : '';
+}
+function countBadgeVisitantes(){
+  const n = visitors.filter(v=>v.status==='pendente').length;
+  return n>0 ? ' ('+n+')' : '';
+}
+
+/* ---- inbox ---- */
+function renderInbox(){
+  const grid = document.createElement('div');
+  grid.className='grid-two';
+
+  const left = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card';
+
+  const toolbar = document.createElement('div');
+  toolbar.className='toolbar';
+  [['todas','Todas'],['reclamacao','Reclamações'],['sugestao','Sugestões'],['elogio','Elogios'],['naoLidas','Não lidas']].forEach(([k,l])=>{
+    const b = document.createElement('button');
+    b.textContent=l;
+    b.className = filtroInbox===k ? 'active' : '';
+    b.onclick = ()=>{ filtroInbox=k; render(); };
+    toolbar.appendChild(b);
+  });
+  card.appendChild(toolbar);
+
+  let list = messages;
+  if(filtroInbox==='naoLidas') list = list.filter(m=>!m.lida);
+  else if(filtroInbox!=='todas') list = list.filter(m=>m.tipo===filtroInbox);
+
+  if(list.length===0){
+    const e = document.createElement('div'); e.className='empty'; e.textContent='Nenhuma mensagem por aqui.';
+    card.appendChild(e);
+  } else {
+    list.forEach(m=>{
+      const item = document.createElement('div');
+      item.className='msg-item' + (!m.lida ? ' unread' : '');
+      item.innerHTML = `
+        <div style="flex:1">
+          <div><span class="pill pill-${m.tipo}">${labelTipo(m.tipo)}</span> ${!confereComCadastro(m.nome,m.unidade) ? '<span class="pill pill-alerta">Não confere com cadastro</span> ' : ''}<strong style="font-size:13.5px">${escapeHtml(m.nome)}</strong> <span class="meta">· ${escapeHtml(m.unidade)}</span></div>
+          <div class="txt">${escapeHtml(m.texto)}</div>
+          <div class="meta">${fmtData(m.criadoEm)}${m.resolvida ? ' · resolvida' : ''}</div>
+        </div>
+      `;
+      item.onclick = async ()=>{
+        mensagemAberta = m.id;
+        if(!m.lida){ m.lida = true; await saveMessage(m); }
+        render();
+      };
+      card.appendChild(item);
+    });
+  }
+  left.appendChild(card);
+  grid.appendChild(left);
+
+  const right = document.createElement('div');
+  const detailCard = document.createElement('div');
+  detailCard.className='card';
+  const m = messages.find(x=>x.id===mensagemAberta);
+  if(!m){
+    detailCard.innerHTML = `<div class="empty">Selecione uma mensagem para ver os detalhes.</div>`;
+  } else {
+    detailCard.innerHTML = `
+      <span class="pill pill-${m.tipo}">${labelTipo(m.tipo)}</span>${!confereComCadastro(m.nome,m.unidade) ? ' <span class="pill pill-alerta">Não confere com cadastro</span>' : ''}
+      <h2 style="margin-top:10px">${escapeHtml(m.nome)}</h2>
+      <p class="meta" style="margin:2px 0 14px">${escapeHtml(m.unidade)} · ${fmtData(m.criadoEm)}</p>
+      <p style="font-size:14px;white-space:pre-wrap">${escapeHtml(m.texto)}</p>
+    `;
+    if(m.imagemData){
+      const img = document.createElement('img');
+      img.className='preview'; img.src = m.imagemData;
+      detailCard.appendChild(img);
+    }
+    if(m.videoData){
+      const vid = document.createElement('video');
+      vid.controls = true; vid.src = m.videoData;
+      detailCard.appendChild(vid);
+    }
+    const actions = document.createElement('div');
+    actions.style.marginTop='16px'; actions.style.display='flex'; actions.style.gap='8px';
+    const resolveBtn = document.createElement('button');
+    resolveBtn.className='btn btn-ghost';
+    resolveBtn.textContent = m.resolvida ? 'Reabrir' : 'Marcar como resolvida';
+    resolveBtn.onclick = async ()=>{ m.resolvida = !m.resolvida; await saveMessage(m); render(); };
+    const delBtn = document.createElement('button');
+    delBtn.className='btn btn-danger';
+    delBtn.textContent='Excluir';
+    delBtn.onclick = async ()=>{
+      await window.storage.delete('messages:'+condoAtual+':'+m.id, true);
+      messages = messages.filter(x=>x.id!==m.id);
+      mensagemAberta = null;
+      render();
+    };
+    actions.appendChild(resolveBtn); actions.appendChild(delBtn);
+    detailCard.appendChild(actions);
+  }
+  right.appendChild(detailCard);
+  grid.appendChild(right);
+
+  return grid;
+}
+function labelTipo(t){ return t==='reclamacao'?'Reclamação':t==='sugestao'?'Sugestão':'Elogio'; }
+function confereComCadastro(nome, unidade){
+  if(residents.length===0) return true; // sem cadastro de moradores ainda, não há o que cruzar
+  return residents.some(r => normaliza(r.unidade)===normaliza(unidade) && normaliza(r.nome)===normaliza(nome));
+}
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML;
+}
+
+/* ---- visitantes / prestadores ---- */
+function renderVisitantes(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Visitantes e prestadores de serviço</h2><p class="lead">Cadastros feitos pelos moradores. A aprovação é opcional — você pode aprovar, reprovar ou deixar pendente.</p>`;
+
+  const toolbar = document.createElement('div');
+  toolbar.className='toolbar';
+  [['todos','Todos'],['pendente','Pendentes'],['aprovado','Aprovados'],['reprovado','Reprovados']].forEach(([k,l])=>{
+    const b = document.createElement('button');
+    b.textContent=l;
+    b.className = visitanteFiltro===k ? 'active' : '';
+    b.onclick = ()=>{ visitanteFiltro=k; render(); };
+    toolbar.appendChild(b);
+  });
+  card.appendChild(toolbar);
+
+  let list = visitors;
+  if(visitanteFiltro!=='todos') list = list.filter(v=>v.status===visitanteFiltro);
+
+  if(list.length===0){
+    const e = document.createElement('div'); e.className='empty'; e.textContent='Nenhum cadastro por aqui.';
+    card.appendChild(e);
+  } else {
+    list.forEach(v=>{
+      const item = document.createElement('div');
+      item.className='visit-item';
+      const info = document.createElement('div');
+      info.innerHTML = `
+        <div><span class="pill pill-${v.status}">${labelStatus(v.status)}</span> ${!confereComCadastro(v.nomeMorador,v.unidade) ? '<span class="pill pill-alerta">Morador não confere com cadastro</span> ' : ''}<strong style="font-size:13.5px">${escapeHtml(v.nomeVisitante)}</strong> <span class="meta">· ${labelGrau(v.grau)}</span></div>
+        <div class="meta" style="margin-top:4px">${v.cpf ? 'CPF: '+escapeHtml(v.cpf)+(validaCPF(v.cpf) ? '' : ' (dígito não confere)') : ''}${v.cpf && v.rg ? ' · ' : ''}${v.rg ? 'RG: '+escapeHtml(v.rg) : ''}</div>
+        <div class="meta">Morador: ${escapeHtml(v.nomeMorador)} · ${escapeHtml(v.unidade)}</div>
+        <div class="meta">${v.data ? 'Data: '+escapeHtml(v.data)+' · ' : ''}Entrada: ${escapeHtml(v.entrada||'—')} · Saída: ${escapeHtml(v.saida||'—')}</div>
+        <div class="meta">Cadastrado em ${fmtData(v.criadoEm)}</div>
+      `;
+      const actions = document.createElement('div');
+      actions.className='visit-actions';
+      const aprovar = document.createElement('button');
+      aprovar.className='aprovar'; aprovar.textContent='Aprovar';
+      aprovar.onclick = async ()=>{ v.status='aprovado'; await saveVisitor(v); render(); };
+      const reprovar = document.createElement('button');
+      reprovar.className='reprovar'; reprovar.textContent='Reprovar';
+      reprovar.onclick = async ()=>{ v.status='reprovado'; await saveVisitor(v); render(); };
+      actions.appendChild(aprovar); actions.appendChild(reprovar);
+      item.appendChild(info); item.appendChild(actions);
+      card.appendChild(item);
+    });
+  }
+  wrap.appendChild(card);
+  return wrap;
+}
+function labelStatus(s){ return s==='aprovado'?'Aprovado':s==='reprovado'?'Reprovado':'Pendente'; }
+function labelGrau(g){
+  return {visitante:'Visitante',prestador:'Prestador de serviço',entrega:'Entrega',familiar:'Familiar',outro:'Outro'}[g] || g;
+}
+
+/* ---- enviar mensagem (broadcast) ---- */
+let broadcastSelecionados = new Set();
+let broadcastTexto = '';
+let broadcastCanalWA = true;
+let broadcastCanalEmail = true;
+
+function renderEnviar(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Enviar mensagem aos moradores</h2><p class="lead">Selecione destinatários e escreva a mensagem.</p>`;
+
+  const warn = document.createElement('div');
+  warn.className='warn';
+  warn.textContent = backendConfig
+    ? 'O envio real por WhatsApp e e-mail está conectado. Alguns destinatários podem não receber se o número/e-mail cadastrado estiver errado, ou se o WhatsApp ainda estiver no Sandbox de testes.'
+    : 'O envio real por WhatsApp e e-mail ainda não está conectado (ver Configurações → Conexão com o servidor de envio). Por enquanto, a mensagem só fica registrada aqui.';
+  card.appendChild(warn);
+
+  if(residents.length===0){
+    const e = document.createElement('div'); e.className='empty';
+    e.textContent = 'Nenhum morador cadastrado ainda. Adicione moradores na aba "Moradores".';
+    card.appendChild(e);
+  } else {
+    const selectAllRow = document.createElement('div');
+    selectAllRow.style.marginBottom='8px';
+    const allChecked = broadcastSelecionados.size === residents.length;
+    const cb = document.createElement('label');
+    cb.style.display='flex'; cb.style.alignItems='center'; cb.style.gap='8px'; cb.style.fontSize='13.5px'; cb.style.fontWeight='600';
+    const cbi = document.createElement('input');
+    cbi.type='checkbox'; cbi.checked = allChecked;
+    cbi.onchange = e=>{
+      if(e.target.checked) residents.forEach(r=>broadcastSelecionados.add(r.id));
+      else broadcastSelecionados.clear();
+      render();
+    };
+    cb.appendChild(cbi); cb.appendChild(document.createTextNode('Selecionar todos os moradores'));
+    selectAllRow.appendChild(cb);
+    card.appendChild(selectAllRow);
+
+    const list = document.createElement('div');
+    list.style.maxHeight='260px'; list.style.overflowY='auto'; list.style.margin='6px 0 18px';
+    residents.forEach(r=>{
+      const row = document.createElement('div');
+      row.className='resident-row';
+      const cbi = document.createElement('input');
+      cbi.type='checkbox'; cbi.checked = broadcastSelecionados.has(r.id);
+      cbi.onchange = e=>{
+        if(e.target.checked) broadcastSelecionados.add(r.id); else broadcastSelecionados.delete(r.id);
+        render();
+      };
+      row.appendChild(cbi);
+      const info = document.createElement('div');
+      info.innerHTML = `<div class="resident-name">${escapeHtml(r.nome)}</div><div class="resident-unit">${escapeHtml(r.unidade)}</div>`;
+      row.appendChild(info);
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+  }
+
+  const msgField = field('Mensagem', null);
+  const ta = document.createElement('textarea');
+  ta.value = broadcastTexto; ta.placeholder='Escreva o comunicado...';
+  ta.oninput = e=> broadcastTexto = e.target.value;
+  msgField.appendChild(ta);
+  card.appendChild(msgField);
+
+  const channels = document.createElement('div');
+  channels.style.display='flex'; channels.style.gap='18px'; channels.style.margin='4px 0 18px';
+  channels.appendChild(checkboxLabel('WhatsApp', broadcastCanalWA, v=>broadcastCanalWA=v));
+  channels.appendChild(checkboxLabel('E-mail', broadcastCanalEmail, v=>broadcastCanalEmail=v));
+  card.appendChild(channels);
+
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary';
+  btn.textContent = 'Registrar e enviar';
+  btn.onclick = async ()=>{
+    if(broadcastSelecionados.size===0){ showToast('Selecione ao menos um morador.'); return; }
+    if(!broadcastTexto.trim()){ showToast('Escreva a mensagem.'); return; }
+    const bc = {
+      id: uid(),
+      texto: broadcastTexto.trim(),
+      destinatarios: [...broadcastSelecionados],
+      canalWhatsapp: broadcastCanalWA,
+      canalEmail: broadcastCanalEmail,
+      criadoEm: Date.now(),
+      status: 'pendente_integracao'
+    };
+    await window.storage.set('broadcasts:'+condoAtual+':'+bc.id, JSON.stringify(bc), true);
+    const totalDestinatarios = bc.destinatarios.length;
+    if(backendConfig){
+      btn.textContent = 'Enviando...'; btn.disabled = true;
+      const destinatariosInfo = bc.destinatarios
+        .map(id => residents.find(r=>r.id===id))
+        .filter(Boolean)
+        .map(r => ({ nome:r.nome, whatsapp:r.whatsapp, email:r.email }));
+      const resultado = await chamarBackend('/api/enviar-broadcast', {
+        mensagem: bc.texto,
+        canalWhatsapp: bc.canalWhatsapp,
+        canalEmail: bc.canalEmail,
+        assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
+        destinatarios: destinatariosInfo
+      });
+      btn.disabled = false;
+      if(resultado && resultado.erro){
+        showToast('Mensagem registrada, mas o envio real falhou: ' + resultado.erro);
+      } else if(resultado && resultado.resultados){
+        const okWA = resultado.resultados.filter(r=>r.whatsapp && r.whatsapp.enviado).length;
+        const okEmail = resultado.resultados.filter(r=>r.email && r.email.enviado).length;
+        const partes = [];
+        if(bc.canalWhatsapp) partes.push(okWA+'/'+totalDestinatarios+' por WhatsApp');
+        if(bc.canalEmail) partes.push(okEmail+'/'+totalDestinatarios+' por e-mail');
+        showToast('Enviado: ' + partes.join(' · ') + '.');
+      } else {
+        showToast('Mensagem registrada para '+totalDestinatarios+' morador(es).');
+      }
+    } else {
+      showToast('Mensagem registrada para '+totalDestinatarios+' morador(es). Configure o backend em Configurações para o envio real.');
+    }
+    broadcastTexto=''; broadcastSelecionados=new Set();
+    render();
+  };
+  card.appendChild(btn);
+
+  wrap.appendChild(card);
+  return wrap;
+}
+function checkboxLabel(text, checked, onChange){
+  const l = document.createElement('label');
+  l.style.display='flex'; l.style.alignItems='center'; l.style.gap='7px'; l.style.fontSize='13.5px'; l.style.fontWeight='600';
+  const i = document.createElement('input');
+  i.type='checkbox'; i.checked=checked;
+  i.onchange = e=>{ onChange(e.target.checked); };
+  l.appendChild(i); l.appendChild(document.createTextNode(text));
+  return l;
+}
+
+/* ---- moradores ---- */
+let novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+function renderMoradores(){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Moradores cadastrados</h2><p class="lead">Cadastre os moradores para poder selecioná-los ao enviar mensagens. O código de acesso é o que a unidade usa para entrar no portal.</p>`;
+
+  const row = document.createElement('div');
+  row.className='row2';
+  row.appendChild(field('Nome', textInput(novoResidente.nome, v=>novoResidente.nome=v, 'Nome do morador')));
+  row.appendChild(field('Unidade', textInput(novoResidente.unidade, v=>novoResidente.unidade=v, 'Bloco/apto')));
+  card.appendChild(row);
+  const row3 = document.createElement('div');
+  row3.className='row2';
+  row3.appendChild(field('WhatsApp', textInput(novoResidente.whatsapp, v=>novoResidente.whatsapp=v, '(11) 90000-0000')));
+  row3.appendChild(field('E-mail', textInput(novoResidente.email, v=>novoResidente.email=v, 'nome@email.com')));
+  card.appendChild(row3);
+  const row4 = document.createElement('div');
+  row4.className='row2';
+  row4.appendChild(field('Código de acesso da unidade', textInput(novoResidente.codigo, v=>novoResidente.codigo=v, 'Ex: 302B')));
+  card.appendChild(row4);
+
+  const addBtn = document.createElement('button');
+  addBtn.className='btn btn-primary';
+  addBtn.textContent='Adicionar morador';
+  addBtn.onclick = async ()=>{
+    if(!novoResidente.nome.trim() || !novoResidente.unidade.trim()){ showToast('Informe nome e unidade.'); return; }
+    if(!novoResidente.codigo.trim()){ showToast('Defina um código de acesso para esta unidade.'); return; }
+    residents.push({ id: uid(), ...novoResidente });
+    await saveResidents();
+    novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+    render();
+  };
+  card.appendChild(addBtn);
+  wrap.appendChild(card);
+
+  const listCard = document.createElement('div');
+  listCard.className='card';
+  if(residents.length===0){
+    listCard.innerHTML = `<div class="empty">Nenhum morador cadastrado.</div>`;
+  } else {
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Nome</th><th>Unidade</th><th>WhatsApp</th><th>E-mail</th><th>Código</th><th></th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    residents.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.unidade)}</td><td>${escapeHtml(r.whatsapp||'—')}</td><td>${escapeHtml(r.email||'—')}</td><td>${escapeHtml(r.codigo||'—')}</td>`;
+      const td = document.createElement('td');
+      const rm = document.createElement('button');
+      rm.className='icon-btn'; rm.textContent='Remover';
+      rm.onclick = async ()=>{ residents = residents.filter(x=>x.id!==r.id); await saveResidents(); render(); };
+      td.appendChild(rm);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    listCard.appendChild(table);
+  }
+  wrap.appendChild(listCard);
+
+  return wrap;
+}
+
+/* ---- configurações ---- */
+function renderConfig(){
+  const wrap = document.createElement('div');
+
+  const brandCard = document.createElement('div');
+  brandCard.className='card';
+  brandCard.innerHTML = `<h2>Identidade</h2><p class="lead">Nome exibido no topo deste condomínio. Deixe em branco para usar o nome cadastrado na área do administrador.</p>`;
+  const brandField = field('Nome do condomínio', null);
+  const brandInput = document.createElement('input');
+  brandInput.type='text'; brandInput.value=config.nomeCondominio; brandInput.placeholder='Ex: Residencial das Palmeiras';
+  brandInput.oninput = e=> config.nomeCondominio = e.target.value;
+  brandField.appendChild(brandInput);
+  brandCard.appendChild(brandField);
+  const brandSaveBtn = document.createElement('button');
+  brandSaveBtn.className='btn btn-ghost'; brandSaveBtn.textContent='Salvar nome';
+  brandSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Nome atualizado.'); render(); };
+  brandCard.appendChild(brandSaveBtn);
+  wrap.appendChild(brandCard);
+
+  const pinCard = document.createElement('div');
+  pinCard.className='card';
+  pinCard.innerHTML = `<h2>Acesso do síndico</h2>`;
+  const pinField = field('PIN de acesso', null);
+  const pinInput = document.createElement('input');
+  pinInput.type='text'; pinInput.value=config.pin;
+  pinInput.oninput = e=> config.pin = e.target.value;
+  pinField.appendChild(pinInput);
+  pinCard.appendChild(pinField);
+  const savePinBtn = document.createElement('button');
+  savePinBtn.className='btn btn-ghost'; savePinBtn.textContent='Salvar PIN';
+  savePinBtn.onclick = async ()=>{ await saveConfig(); showToast('PIN atualizado.'); };
+  pinCard.appendChild(savePinBtn);
+  wrap.appendChild(pinCard);
+
+  const visitCard = document.createElement('div');
+  visitCard.className='card';
+  visitCard.innerHTML = `<h2>Visitantes e prestadores</h2><p class="lead">Defina se a entrada depende de aprovação prévia do síndico ou se a aprovação é só informativa.</p>`;
+  visitCard.appendChild(checkboxLabel('Exigir aprovação do síndico antes da entrada', config.aprovacaoObrigatoria, v=>{config.aprovacaoObrigatoria=v;}));
+  const visitSaveBtn = document.createElement('button');
+  visitSaveBtn.className='btn btn-ghost'; visitSaveBtn.style.marginTop='14px'; visitSaveBtn.textContent='Salvar';
+  visitSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de visitantes salva.'); };
+  visitCard.appendChild(visitSaveBtn);
+  wrap.appendChild(visitCard);
+
+  const waCard = document.createElement('div');
+  waCard.className='card';
+  waCard.innerHTML = `<h2>WhatsApp</h2><p class="lead">Número usado para receber e enviar mensagens dos moradores.</p>`;
+  const waWarn = document.createElement('div'); waWarn.className='warn';
+  waWarn.textContent = 'Este painel guarda apenas o número de exibição. O token de acesso da API do WhatsApp Business precisa ficar em um back-end seguro (nunca em uma página acessada pelos moradores) — veja a explicação no fim desta página.';
+  waCard.appendChild(waWarn);
+  const waField = field('Número do WhatsApp do condomínio', null);
+  const waInput = document.createElement('input');
+  waInput.type='tel'; waInput.value=config.whatsappNumero; waInput.placeholder='(11) 90000-0000';
+  waInput.oninput = e=> config.whatsappNumero = e.target.value;
+  waField.appendChild(waInput);
+  waCard.appendChild(waField);
+  waCard.appendChild(checkboxLabel('Canal WhatsApp ativo', config.whatsappAtivo, v=>{config.whatsappAtivo=v;}));
+  const waSaveBtn = document.createElement('button');
+  waSaveBtn.className='btn btn-ghost'; waSaveBtn.style.marginTop='14px'; waSaveBtn.textContent='Salvar';
+  waSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de WhatsApp salva.'); };
+  waCard.appendChild(waSaveBtn);
+  wrap.appendChild(waCard);
+
+  const emailCard = document.createElement('div');
+  emailCard.className='card';
+  emailCard.innerHTML = `<h2>E-mail</h2><p class="lead">Endereço usado para receber e enviar mensagens dos moradores.</p>`;
+  const emField = field('E-mail do condomínio', null);
+  const emInput = document.createElement('input');
+  emInput.type='email'; emInput.value=config.emailEndereco; emInput.placeholder='sindico@condominio.com.br';
+  emInput.oninput = e=> config.emailEndereco = e.target.value;
+  emField.appendChild(emInput);
+  emailCard.appendChild(emField);
+  emailCard.appendChild(checkboxLabel('Canal e-mail ativo', config.emailAtivo, v=>{config.emailAtivo=v;}));
+  const emSaveBtn = document.createElement('button');
+  emSaveBtn.className='btn btn-ghost'; emSaveBtn.style.marginTop='14px'; emSaveBtn.textContent='Salvar';
+  emSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de e-mail salva.'); };
+  emailCard.appendChild(emSaveBtn);
+  wrap.appendChild(emailCard);
+
+  const backendCard = document.createElement('div');
+  backendCard.className='card';
+  backendCard.innerHTML = `<h2>Servidor conectado</h2><p class="lead">Este painel está usando o servidor abaixo para guardar os dados e enviar WhatsApp/e-mail de verdade. Essa conexão vale para o navegador atual — ela foi feita uma única vez na tela inicial.</p>`;
+  const urlInfo = document.createElement('p');
+  urlInfo.style.fontSize='13.5px'; urlInfo.style.fontWeight='600'; urlInfo.style.wordBreak='break-all';
+  urlInfo.textContent = backendConfig ? backendConfig.url : 'Nenhum servidor conectado';
+  backendCard.appendChild(urlInfo);
+  const trocarBtn = document.createElement('button');
+  trocarBtn.className='btn btn-ghost'; trocarBtn.textContent='Trocar servidor';
+  trocarBtn.onclick = ()=>{ esquecerConfigServidor(); };
+  backendCard.appendChild(trocarBtn);
+  wrap.appendChild(backendCard);
+
+  return wrap;
+}
+
+/* ---------- init ---------- */
+function renderSetupGate(){
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const card = document.createElement('div');
+  card.className='card pin-gate';
+  card.style.marginTop='60px';
+  card.innerHTML = `<h2>Conectar ao servidor</h2><p class="lead">Antes de usar o painel, informe o endereço do backend e a chave de API que você configurou no Render. Isso só precisa ser feito uma vez neste navegador.</p>`;
+  const urlField = field('URL do backend', null);
+  const urlInput = document.createElement('input');
+  urlInput.type='text'; urlInput.placeholder='https://seu-app.onrender.com';
+  urlField.appendChild(urlInput);
+  card.appendChild(urlField);
+  const keyField = field('Chave de API', null);
+  const keyInput = document.createElement('input');
+  keyInput.type='password'; keyInput.placeholder='A mesma API_KEY definida no Render';
+  keyField.appendChild(keyInput);
+  card.appendChild(keyField);
+  const erroMsg = document.createElement('p');
+  erroMsg.style.color='var(--brick)'; erroMsg.style.fontSize='13px'; erroMsg.style.minHeight='16px';
+  card.appendChild(erroMsg);
+  const btn = document.createElement('button');
+  btn.className='btn btn-primary'; btn.textContent='Conectar';
+  btn.onclick = async ()=>{
+    const url = urlInput.value.trim();
+    const apiKey = keyInput.value.trim();
+    if(!url || !apiKey){ erroMsg.textContent='Preencha os dois campos.'; return; }
+    btn.textContent='Conectando...'; btn.disabled=true; erroMsg.textContent='';
+    try{
+      const resp = await fetch(url.replace(/\/+$/,'') + '/api/kv/list', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-api-key': apiKey },
+        body: JSON.stringify({ prefix:'' })
+      });
+      if(!resp.ok){
+        erroMsg.textContent = resp.status===401 ? 'Chave de API incorreta.' : 'Não foi possível conectar (HTTP '+resp.status+').';
+        btn.textContent='Conectar'; btn.disabled=false;
+        return;
+      }
+    }catch(e){
+      erroMsg.textContent = 'Não foi possível conectar: ' + e.message;
+      btn.textContent='Conectar'; btn.disabled=false;
+      return;
+    }
+    salvarConfigServidor({ url, apiKey });
+    initApp();
+  };
+  card.appendChild(btn);
+  app.appendChild(card);
+}
+
+if(backendConfig && backendConfig.url && backendConfig.apiKey){
+  initApp();
+} else {
+  renderSetupGate();
+}
+</script>
+</body>
+</html>
