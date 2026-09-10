@@ -161,7 +161,7 @@
    o arquivo para os moradores. Se deixar em branco, cada navegador precisa
    configurar manualmente na tela "Conectar ao servidor" (útil só para teste). */
 const BACKEND_URL_PADRAO = 'https://portalmazzoni.onrender.com';
-const BACKEND_API_KEY_PADRAO = 'N@th@li@31012002';
+const BACKEND_API_KEY_PADRAO = ''; // <-- cole aqui a mesma API_KEY definida no Render, antes de publicar
 
 let backendConfig = null;
 function carregarConfigServidor(){
@@ -301,10 +301,10 @@ async function initApp(){
   if(condoParam && condominios.some(c=>c.id===condoParam)){
     condoAtual = condoParam;
     await loadCondoData(condoAtual);
-  } else {
-    carregando = false;
-    render();
+    view = 'morador'; // força a tela do morador
   }
+  carregando = false;
+  render();
 }
 
 function baseUrl(){
@@ -911,13 +911,17 @@ function renderMensagemForm(){
       messages.unshift(msg);
       formState.enviado = true;
       if(backendConfig){
+        let anexo = null;
+        if(msg.imagemData) anexo = { dataUrl: msg.imagemData, nome: 'foto.jpg' };
+        else if(msg.videoData) anexo = { dataUrl: msg.videoData, nome: 'video.mp4' };
         chamarBackend('/api/notificar-sindico', {
           canalWhatsapp: config.whatsappAtivo,
           canalEmail: config.emailAtivo,
           whatsappPara: config.whatsappNumero,
           emailPara: config.emailEndereco,
           assunto: 'Nova ' + labelTipo(msg.tipo).toLowerCase() + ' — ' + msg.unidade,
-          mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto
+          mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto,
+          anexo
         });
       }
     }catch(e){
