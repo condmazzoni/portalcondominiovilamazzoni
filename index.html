@@ -1865,15 +1865,11 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
 .modal-input-group { margin-bottom: 20px; }
 .modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
 .modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-</style>
+  `);
 
-<div id="modal-backdrop" style="display:none;">
-  <div class="modal-content" id="modal-body"></div>
-</div>
-
-<script>
 function renderModal(){
   const backdrop = document.getElementById('modal-backdrop');
+  if(!backdrop) return; // modal não existe na DOM, ignorar
   const body = document.getElementById('modal-body');
   
   if(!modalEdicao){
@@ -1981,5 +1977,8 @@ render = function(){
   renderModal();
 };
 </script>
+<div id="modal-backdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
+  <div style="background:white;border-radius:8px;padding:30px;max-width:500px;width:90%;box-shadow:0 4px 12px rgba(0,0,0,0.15);" id="modal-body"></div>
+</div>
 </body>
 </html>
