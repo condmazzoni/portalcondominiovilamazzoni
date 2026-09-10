@@ -349,24 +349,24 @@ function resetSessionState(){
 /* ---- funções de edição ---- */
 function abrirModalEditarCondominio(){
   modalEdicao = 'condominio';
-  render();
+  mostrarModal();
 }
 function abrirModalEditarMorador(morador){
   residenteEdicao = {...morador};
   modalEdicao = 'morador';
-  render();
+  mostrarModal();
 }
 function abrirModalAlterarSenha(){
   novaSenh = '';
   confirmarSenha = '';
   senhaAtual = '';
   modalEdicao = 'alterar-senha';
-  render();
+  mostrarModal();
 }
 function abrirModalResetSenha(){
   senhaAtual = '';
   modalEdicao = 'reset-senha';
-  render();
+  mostrarModal();
 }
 function fecharModal(){
   modalEdicao = null;
@@ -374,7 +374,8 @@ function fecharModal(){
   novaSenh = '';
   confirmarSenha = '';
   senhaAtual = '';
-  render();
+  const backdrop = document.getElementById('modal-backdrop');
+  if(backdrop) backdrop.style.display = 'none';
 }
 async function salvarEdicaoCondominio(){
   config.nomeCondominio = config.nomeCondominio.trim();
@@ -1969,12 +1970,10 @@ function atualizarModalMorador(){
   salvarEdicaoMorador();
 }
 
-// renderizar modal toda vez que render() é chamado
-const originalRender = render;
-render = function(){
-  originalRender();
-  renderModal();
-};
+// renderizar modal quando abrirmos algum
+function mostrarModal(){
+  try { renderModal(); }catch(e){ console.error(e); }
+}
 </script>
 <div id="modal-backdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
   <div style="background:white;border-radius:8px;padding:30px;max-width:500px;width:90%;box-shadow:0 4px 12px rgba(0,0,0,0.15);" id="modal-body"></div>
