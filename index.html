@@ -264,23 +264,55 @@ function gerarSlug(nome){
 }
 function condoInfo(id){ return condominios.find(c=>c.id===id); }
 
+// helpers para usar backend ou window.storage automaticamente
+async function storageGet(key) {
+  if(backendConfig){
+    const r = await chamarBackend('/api/kv/get', { key });
+    return r;
+  } else {
+    return await window.storage.get(key, true);
+  }
+}
+async function storageSet(key, value) {
+  if(backendConfig){
+    await chamarBackend('/api/kv/set', { key, value });
+  } else {
+    await window.storage.set(key, value, true);
+  }
+}
+async function storageList(prefix) {
+  if(backendConfig){
+    return await chamarBackend('/api/kv/list', { prefix });
+  } else {
+    const r = await window.storage.list(prefix, true);
+    return r;
+  }
+}
+async function storageDelete(key) {
+  if(backendConfig){
+    await chamarBackend('/api/kv/delete', { key });
+  } else {
+    await window.storage.delete(key, true);
+  }
+}
+
 async function loadCondominios(){
   try{
-    const r = await window.storage.get('condominios:list', true);
+    const r = await storageGet('condominios:list');
     condominios = r ? JSON.parse(r.value) : [];
   }catch(e){ condominios = []; }
 }
 async function saveCondominios(){
-  await window.storage.set('condominios:list', JSON.stringify(condominios), true);
+  await storageSet('condominios:list', JSON.stringify(condominios));
 }
 async function loadMasterConfig(){
   try{
-    const r = await window.storage.get('master:config', true);
+    const r = await storageGet('master:config');
     if(r) masterConfig = {...masterConfig, ...JSON.parse(r.value)};
   }catch(e){}
 }
 async function saveMasterConfig(){
-  await window.storage.set('master:config', JSON.stringify(masterConfig), true);
+  await storageSet('master:config', JSON.stringify(masterConfig));
 }
 
 function resetSessionState(){
@@ -342,20 +374,20 @@ function sairDoCondo(){
 async function loadCondoData(condoId){
   config = defaultConfig();
   try{
-    const r = await window.storage.get('config:'+condoId, true);
+    const r = await storageGet('config:'+condoId);
     if(r) config = {...config, ...JSON.parse(r.value)};
   }catch(e){}
   try{
-    const r = await window.storage.get('residents:'+condoId, true);
+    const r = await storageGet('residents:'+condoId);
     residents = r ? JSON.parse(r.value) : [];
   }catch(e){ residents = []; }
   try{
-    const list = await window.storage.list('messages:'+condoId+':', true);
+    const list = await storageList('messages:'+condoId+':');
     const items = [];
     if(list && list.keys){
       for(const k of list.keys){
         try{
-          const v = await window.storage.get(k, true);
+          const v = await storageGet(k);
           if(v) items.push(JSON.parse(v.value));
         }catch(e){}
       }
@@ -364,12 +396,12 @@ async function loadCondoData(condoId){
     messages = items;
   }catch(e){ messages = []; }
   try{
-    const list = await window.storage.list('visitors:'+condoId+':', true);
+    const list = await storageList('visitors:'+condoId+':');
     const items = [];
     if(list && list.keys){
       for(const k of list.keys){
         try{
-          const v = await window.storage.get(k, true);
+          const v = await storageGet(k);
           if(v) items.push(JSON.parse(v.value));
         }catch(e){}
       }
@@ -382,16 +414,16 @@ async function loadCondoData(condoId){
 }
 
 async function saveConfig(){
-  await window.storage.set('config:'+condoAtual, JSON.stringify(config), true);
+  await storageSet('config:'+condoAtual, JSON.stringify(config));
 }
 async function saveResidents(){
-  await window.storage.set('residents:'+condoAtual, JSON.stringify(residents), true);
+  await storageSet('residents:'+condoAtual, JSON.stringify(residents));
 }
 async function saveMessage(msg){
-  await window.storage.set('messages:'+condoAtual+':'+msg.id, JSON.stringify(msg), true);
+  await storageSet('messages:'+condoAtual+':'+msg.id, JSON.stringify(msg));
 }
 async function saveVisitor(v){
-  await window.storage.set('visitors:'+condoAtual+':'+v.id, JSON.stringify(v), true);
+  await storageSet('visitors:'+condoAtual+':'+v.id, JSON.stringify(v));
 }
 
 /* ---------- backend de envio real (WhatsApp/e-mail) ---------- */
@@ -1277,7 +1309,7 @@ function renderInbox(){
     delBtn.className='btn btn-danger';
     delBtn.textContent='Excluir';
     delBtn.onclick = async ()=>{
-      await window.storage.delete('messages:'+condoAtual+':'+m.id, true);
+      await storageDelete('messages:'+condoAtual+':'+m.id);
       messages = messages.filter(x=>x.id!==m.id);
       mensagemAberta = null;
       render();
@@ -1444,7 +1476,7 @@ function renderEnviar(){
       criadoEm: Date.now(),
       status: 'pendente_integracao'
     };
-    await window.storage.set('broadcasts:'+condoAtual+':'+bc.id, JSON.stringify(bc), true);
+    await storageSet('broadcasts:'+condoAtual+':'+bc.id, JSON.stringify(bc));
     const totalDestinatarios = bc.destinatarios.length;
     if(backendConfig){
       btn.textContent = 'Enviando...'; btn.disabled = true;
