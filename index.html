@@ -150,18 +150,6 @@
   video, img.preview{max-width:100%;border-radius:var(--radius);margin-top:6px;display:block;}
   .grid-two{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
   @media(max-width:800px){.grid-two{grid-template-columns:1fr;}}
-  /* modais de edição */
-  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
-  .modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .modal-content h2 { margin-top: 0; margin-bottom: 20px; font-size: 20px; }
-  .modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
-  .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
-  .modal-buttons button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-  .modal-buttons .btn-primary { background: var(--ink); color: white; }
-  .modal-buttons .btn-secondary { background: #ccc; color: #333; }
-  .modal-input-group { margin-bottom: 20px; }
-  .modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
-  .modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
 </style>
 </head>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -348,27 +336,43 @@ function resetSessionState(){
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
 }
 
-/* ---- funções de edição ---- */
+/* ---- funções de edição (usam prompt/confirm nativos, sem modal customizado) ---- */
 function abrirModalEditarCondominio(){
-  modalEdicao = 'condominio';
-  mostrarModal();
+  const novoNome = window.prompt('Nome do condomínio:', config.nomeCondominio || '');
+  if(novoNome === null) return; // cancelado
+  const novoEmail = window.prompt('E-mail de contato:', config.emailEndereco || '');
+  if(novoEmail === null) return;
+  config.nomeCondominio = (novoNome || '').trim() || config.nomeCondominio;
+  config.emailEndereco = (novoEmail || '').trim();
+  salvarEdicaoCondominio();
 }
 function abrirModalEditarMorador(morador){
-  residenteEdicao = {...morador};
-  modalEdicao = 'morador';
-  mostrarModal();
+  const nome = window.prompt('Nome do morador:', morador.nome || '');
+  if(nome === null) return;
+  const unidade = window.prompt('Unidade:', morador.unidade || '');
+  if(unidade === null) return;
+  const whatsapp = window.prompt('WhatsApp:', morador.whatsapp || '');
+  if(whatsapp === null) return;
+  const email = window.prompt('E-mail:', morador.email || '');
+  if(email === null) return;
+  const codigo = window.prompt('Código de acesso:', morador.codigo || '');
+  if(codigo === null) return;
+  residenteEdicao = {...morador, nome, unidade, whatsapp, email, codigo};
+  salvarEdicaoMorador();
 }
 function abrirModalAlterarSenha(){
-  novaSenh = '';
-  confirmarSenha = '';
-  senhaAtual = '';
-  modalEdicao = 'alterar-senha';
-  mostrarModal();
+  const nova = window.prompt('Nova senha (mínimo 4 caracteres):', '');
+  if(nova === null) return;
+  const confirmar = window.prompt('Confirme a nova senha:', '');
+  if(confirmar === null) return;
+  novaSenh = nova;
+  confirmarSenha = confirmar;
+  executarAlterarSenha();
 }
 function abrirModalResetSenha(){
-  senhaAtual = '';
-  modalEdicao = 'reset-senha';
-  mostrarModal();
+  if(window.confirm('Tem certeza que deseja resetar a senha do síndico para 1234?')){
+    executarResetSenha();
+  }
 }
 function fecharModal(){
   modalEdicao = null;
@@ -376,8 +380,6 @@ function fecharModal(){
   novaSenh = '';
   confirmarSenha = '';
   senhaAtual = '';
-  const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop) backdrop.style.display = 'none';
 }
 async function salvarEdicaoCondominio(){
   config.nomeCondominio = config.nomeCondominio.trim();
@@ -2064,117 +2066,5 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
   renderSetupGate();
 }
 </script>
-<script>
-function renderModal(){
-  const backdrop = document.getElementById('modal-backdrop');
-  if(!backdrop) return; // modal não existe na DOM, ignorar
-  
-  if(!modalEdicao){
-    backdrop.style.display = 'none';
-    return;
-  }
-  
-  const body = document.getElementById('modal-body');
-  backdrop.style.display = 'flex';
-  
-  if(modalEdicao === 'condominio'){
-    body.innerHTML = `
-      <h2>Editar Condomínio</h2>
-      <div class="modal-input-group">
-        <label>Nome</label>
-        <input type="text" id="modal-condo-nome" value="${escapeHtml(config.nomeCondominio)}" placeholder="Nome do condomínio">
-      </div>
-      <div class="modal-input-group">
-        <label>E-mail</label>
-        <input type="email" id="modal-condo-email" value="${escapeHtml(config.emailEndereco)}" placeholder="email@condominio.com">
-      </div>
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
-        <button class="btn-primary" onclick="atualizarModalCondominio()">Salvar</button>
-      </div>
-    `;
-    document.getElementById('modal-condo-nome').focus();
-  } else if(modalEdicao === 'morador'){
-    body.innerHTML = `
-      <h2>Editar Morador</h2>
-      <div class="modal-input-group">
-        <label>Nome</label>
-        <input type="text" id="modal-res-nome" value="${escapeHtml(residenteEdicao.nome)}" placeholder="Nome">
-      </div>
-      <div class="modal-input-group">
-        <label>Unidade</label>
-        <input type="text" id="modal-res-unidade" value="${escapeHtml(residenteEdicao.unidade)}" placeholder="Bloco/apto">
-      </div>
-      <div class="modal-input-group">
-        <label>WhatsApp</label>
-        <input type="tel" id="modal-res-whatsapp" value="${escapeHtml(residenteEdicao.whatsapp)}" placeholder="(11) 90000-0000">
-      </div>
-      <div class="modal-input-group">
-        <label>E-mail</label>
-        <input type="email" id="modal-res-email" value="${escapeHtml(residenteEdicao.email)}" placeholder="email@exemplo.com">
-      </div>
-      <div class="modal-input-group">
-        <label>Código de acesso</label>
-        <input type="text" id="modal-res-codigo" value="${escapeHtml(residenteEdicao.codigo)}" placeholder="Ex: 302B">
-      </div>
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
-        <button class="btn-primary" onclick="atualizarModalMorador()">Salvar</button>
-      </div>
-    `;
-    document.getElementById('modal-res-nome').focus();
-  } else if(modalEdicao === 'alterar-senha'){
-    body.innerHTML = `
-      <h2>Alterar Senha</h2>
-      <div class="modal-input-group">
-        <label>Nova Senha</label>
-        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" oninput="novaSenh=this.value">
-      </div>
-      <div class="modal-input-group">
-        <label>Confirmar Senha</label>
-        <input type="password" id="modal-confirmar-senha" placeholder="Repita a senha" oninput="confirmarSenha=this.value">
-      </div>
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
-        <button class="btn-primary" onclick="executarAlterarSenha()">Alterar</button>
-      </div>
-    `;
-    document.getElementById('modal-nova-senha').focus();
-  } else if(modalEdicao === 'reset-senha'){
-    body.innerHTML = `
-      <h2>Reset de Senha</h2>
-      <p>A senha do síndico será resetada para: <strong>1234</strong></p>
-      <p>Tem certeza que deseja continuar?</p>
-      <div class="modal-buttons">
-        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
-        <button class="btn-primary" onclick="executarResetSenha()">Resetar Senha</button>
-      </div>
-    `;
-  }
-}
-
-function atualizarModalCondominio(){
-  config.nomeCondominio = document.getElementById('modal-condo-nome').value || config.nomeCondominio;
-  config.emailEndereco = document.getElementById('modal-condo-email').value || config.emailEndereco;
-  salvarEdicaoCondominio();
-}
-
-function atualizarModalMorador(){
-  residenteEdicao.nome = document.getElementById('modal-res-nome').value || residenteEdicao.nome;
-  residenteEdicao.unidade = document.getElementById('modal-res-unidade').value || residenteEdicao.unidade;
-  residenteEdicao.whatsapp = document.getElementById('modal-res-whatsapp').value || residenteEdicao.whatsapp;
-  residenteEdicao.email = document.getElementById('modal-res-email').value || residenteEdicao.email;
-  residenteEdicao.codigo = document.getElementById('modal-res-codigo').value || residenteEdicao.codigo;
-  salvarEdicaoMorador();
-}
-
-// renderizar modal quando abrirmos algum
-function mostrarModal(){
-  try { renderModal(); }catch(e){ console.error(e); }
-}
-</script>
-<div id="modal-backdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:1000;">
-  <div style="background:white;border-radius:8px;padding:30px;max-width:500px;width:90%;box-shadow:0 4px 12px rgba(0,0,0,0.15);" id="modal-body"></div>
-</div>
 </body>
 </html>
