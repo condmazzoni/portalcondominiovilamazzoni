@@ -238,6 +238,8 @@ let sindicoAuth = false;
 let sindicoTab = 'inbox';       // inbox | enviar | moradores | config
 let filtroInbox = 'todas';
 let mensagemAberta = null;
+let analiseIAResultados = {};  // { [mensagemId]: texto da análise }
+let analiseIAEmAndamento = null; // id da mensagem sendo analisada no momento
 let toastMsg = null;
 let carregando = true;
 
@@ -1580,7 +1582,7 @@ function renderInbox(){
       detailCard.appendChild(vid);
     }
     const actions = document.createElement('div');
-    actions.style.marginTop='16px'; actions.style.display='flex'; actions.style.gap='8px';
+    actions.style.marginTop='16px'; actions.style.display='flex'; actions.style.gap='8px'; actions.style.flexWrap='wrap';
     const resolveBtn = document.createElement('button');
     resolveBtn.className='btn btn-ghost';
     resolveBtn.textContent = m.resolvida ? 'Reabrir' : 'Marcar como resolvida';
@@ -1595,7 +1597,23 @@ function renderInbox(){
       render();
     };
     actions.appendChild(resolveBtn); actions.appendChild(delBtn);
+    if(m.tipo === 'reclamacao'){
+      const analiseBtn = document.createElement('button');
+      analiseBtn.className='btn btn-ghost';
+      analiseBtn.textContent = analiseIAEmAndamento === m.id ? 'Analisando...' : '🔍 Analisar com IA';
+      analiseBtn.disabled = analiseIAEmAndamento === m.id;
+      analiseBtn.onclick = ()=> analisarReclamacaoComIA(m);
+      actions.appendChild(analiseBtn);
+    }
     detailCard.appendChild(actions);
+    if(m.tipo === 'reclamacao' && analiseIAResultados[m.id]){
+      const analiseBox = document.createElement('div');
+      analiseBox.style.marginTop='14px'; analiseBox.style.padding='12px 14px';
+      analiseBox.style.background='var(--sky-bg)'; analiseBox.style.borderRadius='var(--radius)';
+      analiseBox.style.fontSize='13.5px'; analiseBox.style.whiteSpace='pre-wrap';
+      analiseBox.innerHTML = `<strong>Análise da IA (com base no regimento):</strong><br>${escapeHtml(analiseIAResultados[m.id])}`;
+      detailCard.appendChild(analiseBox);
+    }
   }
   right.appendChild(detailCard);
   grid.appendChild(right);
@@ -1603,6 +1621,31 @@ function renderInbox(){
   return grid;
 }
 function labelTipo(t){ return t==='reclamacao'?'Reclamação':t==='sugestao'?'Sugestão':'Elogio'; }
+async function analisarReclamacaoComIA(m){
+  if(!config.regimento){
+    showToast('Anexe o regimento em Configurações antes de analisar.');
+    return;
+  }
+  if(!backendConfig){
+    showToast('Conecte o servidor em Configurações para usar a análise por IA.');
+    return;
+  }
+  analiseIAEmAndamento = m.id;
+  render();
+  const resultado = await chamarBackend('/api/analisar-reclamacao', {
+    mensagem: m.texto,
+    regimento: config.regimento
+  });
+  analiseIAEmAndamento = null;
+  if(resultado && resultado.erro){
+    showToast('Não foi possível analisar: ' + resultado.erro);
+  } else if(resultado && resultado.analise){
+    analiseIAResultados[m.id] = resultado.analise;
+  } else {
+    showToast('A análise não retornou resultado.');
+  }
+  render();
+}
 function confereComCadastro(nome, unidade){
   if(residents.length===0) return true; // sem cadastro de moradores ainda, não há o que cruzar
   return residents.some(r => normaliza(r.unidade)===normaliza(unidade) && normaliza(r.nome)===normaliza(nome));
@@ -1814,7 +1857,7 @@ function renderEnviar(){
         canalEmail: bc.canalEmail,
         assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
         destinatarios: destinatariosInfo,
-        anexo
+        anexos: anexo ? [anexo] : []
       });
       btn.disabled = false;
       if(resultado && resultado.erro){
