@@ -164,6 +164,8 @@
   .modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
 </style>
 </head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
 <body>
 <div class="app" id="app"></div>
 
@@ -418,6 +420,101 @@ async function executarResetSenha(){
   await saveMasterConfig();
   fecharModal();
   showToast('Senha do síndico resetada para: '+novo);
+}
+
+/* ---- exportação de dados ---- */
+function exportarMensagensExcel(){
+  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
+  const dados = messages.map(m=>({
+    'Data/Hora': new Date(m.criadoEm).toLocaleString('pt-BR'),
+    'Morador': m.moradorNome || '—',
+    'Tipo': m.tipo || '—',
+    'Assunto': m.assunto || m.titulo || '—',
+    'Mensagem': m.mensagem || '—',
+    'Status': m.resolvida ? 'Resolvida' : 'Pendente'
+  }));
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mensagens');
+  XLSX.writeFile(wb, `mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Mensagens exportadas!');
+}
+
+function exportarVisitantesExcel(){
+  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
+  const dados = visitors.map(v=>({
+    'Data': new Date(v.criadoEm).toLocaleDateString('pt-BR'),
+    'Hora entrada': v.entrada || '—',
+    'Hora saída': v.saida || '—',
+    'Morador': v.moradorNome || '—',
+    'Unidade': v.unidade || '—',
+    'Nome do visitante': v.nomeVisitante || '—',
+    'CPF': v.cpf || '—',
+    'RG': v.rg || '—',
+    'Grau': v.grau || '—'
+  }));
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Visitantes');
+  XLSX.writeFile(wb, `visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Visitantes exportados!');
+}
+
+function exportarMensagensPDF(){
+  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Relatório de Mensagens', 10, 10);
+  doc.setFontSize(10);
+  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
+  
+  let y = 35;
+  messages.forEach((m, i)=>{
+    if(y > 250){ doc.addPage(); y = 10; }
+    doc.setFontSize(9);
+    doc.text(`${i+1}. ${m.moradorNome || 'Anônimo'} - ${new Date(m.criadoEm).toLocaleString('pt-BR')}`, 10, y);
+    y += 5;
+    doc.setFontSize(8);
+    const linhas = doc.splitTextToSize(m.mensagem || '', 190);
+    linhas.forEach(linha=>{ 
+      if(y > 250){ doc.addPage(); y = 10; }
+      doc.text(linha, 10, y); 
+      y += 4;
+    });
+    y += 3;
+  });
+  
+  doc.save(`mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('Mensagens exportadas em PDF!');
+}
+
+function exportarVisitantesPDF(){
+  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Relatório de Visitantes', 10, 10);
+  doc.setFontSize(10);
+  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
+  
+  let y = 35;
+  visitors.forEach((v, i)=>{
+    if(y > 240){ doc.addPage(); y = 10; }
+    doc.setFontSize(9);
+    doc.text(`${i+1}. ${v.nomeVisitante} - Apt ${v.unidade} (${new Date(v.criadoEm).toLocaleDateString('pt-BR')})`, 10, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text(`CPF: ${v.cpf || '—'} | RG: ${v.rg || '—'} | Grau: ${v.grau || '—'}`, 10, y);
+    y += 4;
+    doc.text(`Entrada: ${v.entrada || '—'} | Saída: ${v.saida || '—'}`, 10, y);
+    y += 6;
+  });
+  
+  doc.save(`visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('Visitantes exportados em PDF!');
 }
 
 async function initApp(){
@@ -1387,6 +1484,18 @@ function renderInbox(){
   });
   card.appendChild(toolbar);
 
+  // Botões de exportação
+  const exportDiv = document.createElement('div');
+  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
+  const expExcelBtn = document.createElement('button');
+  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
+  expExcelBtn.onclick = ()=> exportarMensagensExcel();
+  const expPdfBtn = document.createElement('button');
+  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
+  expPdfBtn.onclick = ()=> exportarMensagensPDF();
+  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
+  card.appendChild(exportDiv);
+
   let list = messages;
   if(filtroInbox==='naoLidas') list = list.filter(m=>!m.lida);
   else if(filtroInbox!=='todas') list = list.filter(m=>m.tipo===filtroInbox);
@@ -1488,6 +1597,18 @@ function renderVisitantes(){
     toolbar.appendChild(b);
   });
   card.appendChild(toolbar);
+
+  // Botões de exportação
+  const exportDiv = document.createElement('div');
+  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
+  const expExcelBtn = document.createElement('button');
+  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
+  expExcelBtn.onclick = ()=> exportarVisitantesExcel();
+  const expPdfBtn = document.createElement('button');
+  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
+  expPdfBtn.onclick = ()=> exportarVisitantesPDF();
+  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
+  card.appendChild(exportDiv);
 
   let list = visitors;
   if(visitanteFiltro!=='todos') list = list.filter(v=>v.status===visitanteFiltro);
@@ -1947,13 +2068,13 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
 function renderModal(){
   const backdrop = document.getElementById('modal-backdrop');
   if(!backdrop) return; // modal não existe na DOM, ignorar
-  const body = document.getElementById('modal-body');
   
   if(!modalEdicao){
     backdrop.style.display = 'none';
     return;
   }
   
+  const body = document.getElementById('modal-body');
   backdrop.style.display = 'flex';
   
   if(modalEdicao === 'condominio'){
