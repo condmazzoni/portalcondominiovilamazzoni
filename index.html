@@ -2056,15 +2056,17 @@ function renderConfig(){
     regimentoCard.appendChild(p);
   }
   
-  const uploadLabel = document.createElement('label');
-  uploadLabel.style.display='block'; uploadLabel.style.marginTop='15px'; uploadLabel.style.cursor='pointer';
-  uploadLabel.innerHTML = `<button class="btn btn-primary" style="width:100%;">Escolher arquivo</button>`;
   const fileInput = document.createElement('input');
   fileInput.type='file'; fileInput.style.display='none';
   fileInput.accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png';
   fileInput.onchange = (e)=>{ if(e.target.files[0]) uploadRegimento(e.target.files[0]); };
-  uploadLabel.appendChild(fileInput);
-  regimentoCard.appendChild(uploadLabel);
+  const uploadBtn = document.createElement('button');
+  uploadBtn.className='btn btn-primary'; uploadBtn.style.width='100%'; uploadBtn.style.marginTop='15px';
+  uploadBtn.type='button';
+  uploadBtn.textContent='Escolher arquivo';
+  uploadBtn.onclick = ()=> fileInput.click();
+  regimentoCard.appendChild(uploadBtn);
+  regimentoCard.appendChild(fileInput);
   
   wrap.appendChild(regimentoCard);
 
