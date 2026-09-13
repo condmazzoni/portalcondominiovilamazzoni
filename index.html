@@ -286,7 +286,8 @@ async function storageGet(key) {
 }
 async function storageSet(key, value) {
   if(backendConfig){
-    await chamarBackend('/api/kv/set', { key, value });
+    const r = await chamarBackend('/api/kv/set', { key, value });
+    if(r && r.erro) throw new Error(r.erro);
   } else {
     await window.storage.set(key, value, true);
   }
@@ -332,7 +333,7 @@ function resetSessionState(){
   formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
   visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
   visitanteFiltro='todos';
-  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
+  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true; broadcastAnexoData=null; broadcastAnexoNome='';
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
 }
 
@@ -384,9 +385,11 @@ function fecharModal(){
 async function salvarEdicaoCondominio(){
   config.nomeCondominio = config.nomeCondominio.trim();
   if(!config.nomeCondominio){ showToast('Informe o nome do condomínio.'); return; }
-  await saveConfig();
-  fecharModal();
-  showToast('Condomínio atualizado!');
+  try{
+    await saveConfig();
+    fecharModal();
+    showToast('Condomínio atualizado!');
+  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
 }
 async function salvarEdicaoMorador(){
   residenteEdicao.nome = residenteEdicao.nome.trim();
@@ -399,9 +402,11 @@ async function salvarEdicaoMorador(){
   const idx = residents.findIndex(r=>r.id === residenteEdicao.id);
   if(idx >= 0){
     residents[idx] = residenteEdicao;
-    await saveResidents();
-    fecharModal();
-    showToast('Morador atualizado!');
+    try{
+      await saveResidents();
+      fecharModal();
+      showToast('Morador atualizado!');
+    }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
   }
 }
 async function executarAlterarSenha(){
@@ -412,16 +417,20 @@ async function executarAlterarSenha(){
   if(!morador){ showToast('Não foi possível identificar o morador.'); return; }
   morador.codigo = novaSenh;
   residents = residents.map(r=>r.id===morador.id ? morador : r);
-  await saveResidents();
-  fecharModal();
-  showToast('Senha alterada com sucesso!');
+  try{
+    await saveResidents();
+    fecharModal();
+    showToast('Senha alterada com sucesso!');
+  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
 }
 async function executarResetSenha(){
   const novo = '1234';
   masterConfig.pin = novo;
-  await saveMasterConfig();
-  fecharModal();
-  showToast('Senha do síndico resetada para: '+novo);
+  try{
+    await saveMasterConfig();
+    fecharModal();
+    showToast('Senha do síndico resetada para: '+novo);
+  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
 }
 
 /* ---- exportação de dados ---- */
@@ -429,10 +438,10 @@ function exportarMensagensExcel(){
   if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
   const dados = messages.map(m=>({
     'Data/Hora': new Date(m.criadoEm).toLocaleString('pt-BR'),
-    'Morador': m.moradorNome || '—',
-    'Tipo': m.tipo || '—',
-    'Assunto': m.assunto || m.titulo || '—',
-    'Mensagem': m.mensagem || '—',
+    'Morador': m.nome || '—',
+    'Unidade': m.unidade || '—',
+    'Tipo': labelTipo(m.tipo) || '—',
+    'Mensagem': m.texto || '—',
     'Status': m.resolvida ? 'Resolvida' : 'Pendente'
   }));
   const ws = XLSX.utils.json_to_sheet(dados);
@@ -448,7 +457,7 @@ function exportarVisitantesExcel(){
     'Data': new Date(v.criadoEm).toLocaleDateString('pt-BR'),
     'Hora entrada': v.entrada || '—',
     'Hora saída': v.saida || '—',
-    'Morador': v.moradorNome || '—',
+    'Morador': v.nomeMorador || '—',
     'Unidade': v.unidade || '—',
     'Nome do visitante': v.nomeVisitante || '—',
     'CPF': v.cpf || '—',
@@ -476,10 +485,10 @@ function exportarMensagensPDF(){
   messages.forEach((m, i)=>{
     if(y > 250){ doc.addPage(); y = 10; }
     doc.setFontSize(9);
-    doc.text(`${i+1}. ${m.moradorNome || 'Anônimo'} - ${new Date(m.criadoEm).toLocaleString('pt-BR')}`, 10, y);
+    doc.text(`${i+1}. ${m.nome || 'Anônimo'} (${m.unidade || '—'}) - ${new Date(m.criadoEm).toLocaleString('pt-BR')}`, 10, y);
     y += 5;
     doc.setFontSize(8);
-    const linhas = doc.splitTextToSize(m.mensagem || '', 190);
+    const linhas = doc.splitTextToSize(m.texto || '', 190);
     linhas.forEach(linha=>{ 
       if(y > 250){ doc.addPage(); y = 10; }
       doc.text(linha, 10, y); 
@@ -610,18 +619,29 @@ async function loadCondoData(condoId){
 async function saveConfig(){
   await storageSet('config:'+condoAtual, JSON.stringify(config));
 }
+async function salvarConfigComToast(msgOk){
+  try{ await saveConfig(); showToast(msgOk); }
+  catch(e){ showToast('Não foi possível salvar: ' + e.message); }
+}
 async function uploadRegimento(file){
   if(!file) return;
+  if(file.size > 4*1024*1024){ showToast('Arquivo muito grande (máx. 4MB).'); return; }
   const reader = new FileReader();
   reader.onload = async (e)=>{
+    const regimentoAnterior = config.regimento;
     config.regimento = {
       nome: file.name,
       tipo: file.type,
       tamanho: file.size,
       data: e.target.result // base64
     };
-    await saveConfig();
-    showToast('Regimento enviado com sucesso!');
+    try{
+      await saveConfig();
+      showToast('Regimento enviado com sucesso!');
+    }catch(err){
+      config.regimento = regimentoAnterior;
+      showToast('Não foi possível enviar o regimento: ' + err.message);
+    }
     render();
   };
   reader.onerror = ()=> showToast('Erro ao ler o arquivo.');
@@ -639,9 +659,15 @@ function downloadRegimento(){
 }
 async function removerRegimento(){
   if(confirm('Tem certeza que deseja remover o regimento?')){
+    const anterior = config.regimento;
     config.regimento = null;
-    await saveConfig();
-    showToast('Regimento removido.');
+    try{
+      await saveConfig();
+      showToast('Regimento removido.');
+    }catch(e){
+      config.regimento = anterior;
+      showToast('Não foi possível remover: ' + e.message);
+    }
     render();
   }
 }
@@ -924,7 +950,10 @@ function renderMasterPanel(){
   masterPinCard.appendChild(mpField);
   const mpBtn = document.createElement('button');
   mpBtn.className='btn btn-ghost'; mpBtn.textContent='Salvar senha';
-  mpBtn.onclick = async ()=>{ await saveMasterConfig(); showToast('Senha de administrador atualizada.'); };
+  mpBtn.onclick = async ()=>{
+    try{ await saveMasterConfig(); showToast('Senha de administrador atualizada.'); }
+    catch(e){ showToast('Não foi possível salvar: ' + e.message); }
+  };
   masterPinCard.appendChild(mpBtn);
   wrap.appendChild(masterPinCard);
 
@@ -1656,6 +1685,8 @@ let broadcastSelecionados = new Set();
 let broadcastTexto = '';
 let broadcastCanalWA = true;
 let broadcastCanalEmail = true;
+let broadcastAnexoData = null;
+let broadcastAnexoNome = '';
 
 function renderEnviar(){
   const wrap = document.createElement('div');
@@ -1718,6 +1749,33 @@ function renderEnviar(){
   msgField.appendChild(ta);
   card.appendChild(msgField);
 
+  // anexo (opcional): foto, PDF ou documento
+  const anexoField = field('Anexo — foto, PDF ou documento (opcional)', null);
+  const anexoBox = document.createElement('div');
+  anexoBox.className = 'filebox' + (broadcastAnexoData ? ' has' : '');
+  anexoBox.textContent = broadcastAnexoData ? ('Anexado: '+broadcastAnexoNome) : 'Nenhum arquivo selecionado';
+  const anexoInput = document.createElement('input');
+  anexoInput.type='file';
+  anexoInput.accept='image/*,application/pdf,.doc,.docx,.txt';
+  anexoInput.style.marginTop='8px'; anexoInput.style.display='block';
+  anexoInput.onchange = async e=>{
+    const f = e.target.files[0]; if(!f) return;
+    if(f.size > 8*1024*1024){ showToast('Arquivo muito grande (máx. 8MB).'); e.target.value=''; return; }
+    broadcastAnexoData = await fileToBase64(f);
+    broadcastAnexoNome = f.name;
+    render();
+  };
+  anexoField.appendChild(anexoBox);
+  anexoField.appendChild(anexoInput);
+  if(broadcastAnexoData){
+    const rmAnexo = document.createElement('button');
+    rmAnexo.className='btn btn-ghost'; rmAnexo.style.marginTop='8px'; rmAnexo.style.fontSize='12px';
+    rmAnexo.textContent='Remover anexo';
+    rmAnexo.onclick = ()=>{ broadcastAnexoData=null; broadcastAnexoNome=''; render(); };
+    anexoField.appendChild(rmAnexo);
+  }
+  card.appendChild(anexoField);
+
   const channels = document.createElement('div');
   channels.style.display='flex'; channels.style.gap='18px'; channels.style.margin='4px 0 18px';
   channels.appendChild(checkboxLabel('WhatsApp', broadcastCanalWA, v=>broadcastCanalWA=v));
@@ -1736,6 +1794,8 @@ function renderEnviar(){
       destinatarios: [...broadcastSelecionados],
       canalWhatsapp: broadcastCanalWA,
       canalEmail: broadcastCanalEmail,
+      anexoData: broadcastAnexoData,
+      anexoNome: broadcastAnexoNome,
       criadoEm: Date.now(),
       status: 'pendente_integracao'
     };
@@ -1747,12 +1807,14 @@ function renderEnviar(){
         .map(id => residents.find(r=>r.id===id))
         .filter(Boolean)
         .map(r => ({ nome:r.nome, whatsapp:r.whatsapp, email:r.email }));
+      const anexo = bc.anexoData ? { dataUrl: bc.anexoData, nome: bc.anexoNome || 'anexo' } : null;
       const resultado = await chamarBackend('/api/enviar-broadcast', {
         mensagem: bc.texto,
         canalWhatsapp: bc.canalWhatsapp,
         canalEmail: bc.canalEmail,
         assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
-        destinatarios: destinatariosInfo
+        destinatarios: destinatariosInfo,
+        anexo
       });
       btn.disabled = false;
       if(resultado && resultado.erro){
@@ -1770,7 +1832,7 @@ function renderEnviar(){
     } else {
       showToast('Mensagem registrada para '+totalDestinatarios+' morador(es). Configure o backend em Configurações para o envio real.');
     }
-    broadcastTexto=''; broadcastSelecionados=new Set();
+    broadcastTexto=''; broadcastSelecionados=new Set(); broadcastAnexoData=null; broadcastAnexoNome='';
     render();
   };
   card.appendChild(btn);
@@ -1887,7 +1949,7 @@ function renderConfig(){
   brandCard.appendChild(brandField);
   const brandSaveBtn = document.createElement('button');
   brandSaveBtn.className='btn btn-ghost'; brandSaveBtn.textContent='Salvar nome';
-  brandSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Nome atualizado.'); render(); };
+  brandSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Nome atualizado.'); render(); };
   brandCard.appendChild(brandSaveBtn);
   wrap.appendChild(brandCard);
 
@@ -1902,7 +1964,7 @@ function renderConfig(){
   pinCard.appendChild(pinField);
   const savePinBtn = document.createElement('button');
   savePinBtn.className='btn btn-ghost'; savePinBtn.textContent='Salvar PIN';
-  savePinBtn.onclick = async ()=>{ await saveConfig(); showToast('PIN atualizado.'); };
+  savePinBtn.onclick = async ()=>{ await salvarConfigComToast('PIN atualizado.'); };
   pinCard.appendChild(savePinBtn);
   wrap.appendChild(pinCard);
 
@@ -1912,7 +1974,7 @@ function renderConfig(){
   visitCard.appendChild(checkboxLabel('Exigir aprovação do síndico antes da entrada', config.aprovacaoObrigatoria, v=>{config.aprovacaoObrigatoria=v;}));
   const visitSaveBtn = document.createElement('button');
   visitSaveBtn.className='btn btn-ghost'; visitSaveBtn.style.marginTop='14px'; visitSaveBtn.textContent='Salvar';
-  visitSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de visitantes salva.'); };
+  visitSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de visitantes salva.'); };
   visitCard.appendChild(visitSaveBtn);
   wrap.appendChild(visitCard);
 
@@ -1931,7 +1993,7 @@ function renderConfig(){
   waCard.appendChild(checkboxLabel('Canal WhatsApp ativo', config.whatsappAtivo, v=>{config.whatsappAtivo=v;}));
   const waSaveBtn = document.createElement('button');
   waSaveBtn.className='btn btn-ghost'; waSaveBtn.style.marginTop='14px'; waSaveBtn.textContent='Salvar';
-  waSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de WhatsApp salva.'); };
+  waSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de WhatsApp salva.'); };
   waCard.appendChild(waSaveBtn);
   wrap.appendChild(waCard);
 
@@ -1947,7 +2009,7 @@ function renderConfig(){
   emailCard.appendChild(checkboxLabel('Canal e-mail ativo', config.emailAtivo, v=>{config.emailAtivo=v;}));
   const emSaveBtn = document.createElement('button');
   emSaveBtn.className='btn btn-ghost'; emSaveBtn.style.marginTop='14px'; emSaveBtn.textContent='Salvar';
-  emSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de e-mail salva.'); };
+  emSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de e-mail salva.'); };
   emailCard.appendChild(emSaveBtn);
   wrap.appendChild(emailCard);
 
