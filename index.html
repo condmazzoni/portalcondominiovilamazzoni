@@ -333,7 +333,7 @@ function resetSessionState(){
   view='morador'; sindicoAuth=false; sindicoTab='inbox'; filtroInbox='todas'; mensagemAberta=null;
   moradorAuth=null; gateUnidade=''; gateCodigo=''; moradorTab='mensagem'; pinValue='';
   formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
-  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false };
   visitanteFiltro='todos';
   broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true; broadcastAnexoData=null; broadcastAnexoNome='';
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
@@ -456,15 +456,17 @@ function exportarMensagensExcel(){
 function exportarVisitantesExcel(){
   if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
   const dados = visitors.map(v=>({
-    'Data': new Date(v.criadoEm).toLocaleDateString('pt-BR'),
+    'Data entrada': v.data || new Date(v.criadoEm).toLocaleDateString('pt-BR'),
     'Hora entrada': v.entrada || '—',
-    'Hora saída': v.saida || '—',
+    'Data saída (prevista)': v.dataSaida || '—',
+    'Hora saída (prevista)': v.saida || '—',
     'Morador': v.nomeMorador || '—',
     'Unidade': v.unidade || '—',
     'Nome do visitante': v.nomeVisitante || '—',
     'CPF': v.cpf || '—',
     'RG': v.rg || '—',
-    'Grau': v.grau || '—'
+    'Grau': v.grau || '—',
+    'Observação': v.observacao || '—'
   }));
   const ws = XLSX.utils.json_to_sheet(dados);
   const wb = XLSX.utils.book_new();
@@ -522,8 +524,17 @@ function exportarVisitantesPDF(){
     doc.setFontSize(8);
     doc.text(`CPF: ${v.cpf || '—'} | RG: ${v.rg || '—'} | Grau: ${v.grau || '—'}`, 10, y);
     y += 4;
-    doc.text(`Entrada: ${v.entrada || '—'} | Saída: ${v.saida || '—'}`, 10, y);
-    y += 6;
+    doc.text(`Entrada: ${v.data || '—'} ${v.entrada || ''} | Saída prevista: ${v.dataSaida || '—'} ${v.saida || ''}`, 10, y);
+    y += 4;
+    if(v.observacao){
+      const linhasObs = doc.splitTextToSize('Observação: ' + v.observacao, 190);
+      linhasObs.forEach(linha=>{
+        if(y > 250){ doc.addPage(); y = 10; }
+        doc.text(linha, 10, y);
+        y += 4;
+      });
+    }
+    y += 2;
   });
   
   doc.save(`visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -1238,7 +1249,7 @@ function renderMensagemForm(){
   return wrap;
 }
 
-let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false };
 
 function renderVisitanteForm(){
   const wrap = document.createElement('div');
@@ -1254,7 +1265,7 @@ function renderVisitanteForm(){
     const btn = document.createElement('button');
     btn.className='btn btn-ghost';
     btn.textContent='Cadastrar outro visitante';
-    btn.onclick = ()=>{ visitorFormState = { nomeMorador: moradorAuth ? moradorAuth.nomeSugerido : '', unidade: moradorAuth ? moradorAuth.unidade : '', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false }; render(); };
+    btn.onclick = ()=>{ visitorFormState = { nomeMorador: moradorAuth ? moradorAuth.nomeSugerido : '', unidade: moradorAuth ? moradorAuth.unidade : '', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false }; render(); };
     c.appendChild(btn);
     wrap.appendChild(c);
     return wrap;
@@ -1333,28 +1344,42 @@ function renderVisitanteForm(){
 
   const row3 = document.createElement('div');
   row3.className='row2';
-  const dataField = field('Data da visita', null);
+  const dataField = field('Data de entrada', null);
   const dataInput = document.createElement('input');
   dataInput.type='text'; dataInput.inputMode='numeric'; dataInput.placeholder='dd/mm/aaaa'; dataInput.value=visitorFormState.data;
   dataInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.data = m; };
   dataField.appendChild(dataInput);
-  row3.appendChild(dataField);
-  card.appendChild(row3);
-
-  const row4 = document.createElement('div');
-  row4.className='row2';
   const entradaField = field('Horário de entrada', null);
   const entradaInput = document.createElement('input');
   entradaInput.type='text'; entradaInput.inputMode='numeric'; entradaInput.placeholder='14:00'; entradaInput.value=visitorFormState.entrada;
   entradaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.entrada = m; };
   entradaField.appendChild(entradaInput);
+  row3.appendChild(dataField); row3.appendChild(entradaField);
+  card.appendChild(row3);
+
+  const row4 = document.createElement('div');
+  row4.className='row2';
+  const dataSaidaField = field('Data prevista de saída', null);
+  const dataSaidaInput = document.createElement('input');
+  dataSaidaInput.type='text'; dataSaidaInput.inputMode='numeric'; dataSaidaInput.placeholder='dd/mm/aaaa'; dataSaidaInput.value=visitorFormState.dataSaida;
+  dataSaidaInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.dataSaida = m; };
+  dataSaidaField.appendChild(dataSaidaInput);
   const saidaField = field('Horário de saída (previsto)', null);
   const saidaInput = document.createElement('input');
   saidaInput.type='text'; saidaInput.inputMode='numeric'; saidaInput.placeholder='18:00'; saidaInput.value=visitorFormState.saida;
   saidaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.saida = m; };
   saidaField.appendChild(saidaInput);
-  row4.appendChild(entradaField); row4.appendChild(saidaField);
+  row4.appendChild(dataSaidaField); row4.appendChild(saidaField);
   card.appendChild(row4);
+
+  const obsField = field('Observação (opcional)', null);
+  const obsTa = document.createElement('textarea');
+  obsTa.value = visitorFormState.observacao;
+  obsTa.placeholder = 'Ex: prestador vai ficar hospedado até sexta-feira, ou: serviço de manutenção do ar-condicionado.';
+  obsTa.rows = 3;
+  obsTa.oninput = e=> visitorFormState.observacao = e.target.value;
+  obsField.appendChild(obsTa);
+  card.appendChild(obsField);
 
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
@@ -1386,7 +1411,9 @@ function renderVisitanteForm(){
       grau: visitorFormState.grau,
       data: visitorFormState.data.trim(),
       entrada: visitorFormState.entrada.trim(),
+      dataSaida: visitorFormState.dataSaida.trim(),
       saida: visitorFormState.saida.trim(),
+      observacao: visitorFormState.observacao.trim(),
       criadoEm: Date.now(),
       status: 'pendente'
     };
@@ -1401,7 +1428,7 @@ function renderVisitanteForm(){
           whatsappPara: config.whatsappNumero,
           emailPara: config.emailEndereco,
           assunto: 'Novo visitante cadastrado — ' + v.unidade,
-          mensagem: 'Visitante: ' + v.nomeVisitante + ' (' + labelGrau(v.grau) + ') autorizado por ' + v.nomeMorador + ' — ' + v.unidade + (v.data ? ' em ' + v.data : '') + (v.entrada ? ', entrada às ' + v.entrada : '') + '.'
+          mensagem: 'Visitante: ' + v.nomeVisitante + ' (' + labelGrau(v.grau) + ') autorizado por ' + v.nomeMorador + ' — ' + v.unidade + (v.data ? ' em ' + v.data : '') + (v.entrada ? ', entrada às ' + v.entrada : '') + (v.dataSaida ? ', saída prevista ' + v.dataSaida : '') + (v.saida ? ' às ' + v.saida : '') + '.' + (v.observacao ? ('\n\nObservação: ' + v.observacao) : '')
         });
       }
     }catch(e){
@@ -1699,7 +1726,8 @@ function renderVisitantes(){
         <div><span class="pill pill-${v.status}">${labelStatus(v.status)}</span> ${!confereComCadastro(v.nomeMorador,v.unidade) ? '<span class="pill pill-alerta">Morador não confere com cadastro</span> ' : ''}<strong style="font-size:13.5px">${escapeHtml(v.nomeVisitante)}</strong> <span class="meta">· ${labelGrau(v.grau)}</span></div>
         <div class="meta" style="margin-top:4px">${v.cpf ? 'CPF: '+escapeHtml(v.cpf)+(validaCPF(v.cpf) ? '' : ' (dígito não confere)') : ''}${v.cpf && v.rg ? ' · ' : ''}${v.rg ? 'RG: '+escapeHtml(v.rg) : ''}</div>
         <div class="meta">Morador: ${escapeHtml(v.nomeMorador)} · ${escapeHtml(v.unidade)}</div>
-        <div class="meta">${v.data ? 'Data: '+escapeHtml(v.data)+' · ' : ''}Entrada: ${escapeHtml(v.entrada||'—')} · Saída: ${escapeHtml(v.saida||'—')}</div>
+        <div class="meta">${v.data ? 'Data: '+escapeHtml(v.data)+' · ' : ''}Entrada: ${escapeHtml(v.entrada||'—')} · Saída: ${escapeHtml(v.saida||'—')}${v.dataSaida ? ' ('+escapeHtml(v.dataSaida)+')' : ''}</div>
+        ${v.observacao ? '<div class="meta" style="white-space:pre-wrap">Observação: '+escapeHtml(v.observacao)+'</div>' : ''}
         <div class="meta">Cadastrado em ${fmtData(v.criadoEm)}</div>
       `;
       const actions = document.createElement('div');
