@@ -150,14 +150,133 @@
   video, img.preview{max-width:100%;border-radius:var(--radius);margin-top:6px;display:block;}
   .grid-two{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
   @media(max-width:800px){.grid-two{grid-template-columns:1fr;}}
+  /* modais de edição */
+  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .modal-content h2 { margin-top: 0; margin-bottom: 20px; font-size: 20px; }
+  .modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
+  .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
+  .modal-buttons button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+  .modal-buttons .btn-primary { background: var(--ink); color: white; }
+  .modal-buttons .btn-secondary { background: #ccc; color: #333; }
+  .modal-input-group { margin-bottom: 20px; }
+  .modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
+  .modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+
+  /* PWA Install Prompt */
+  .pwa-install-prompt {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+    color: white;
+    padding: 16px 20px;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    z-index: 10000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .pwa-install-prompt.show {
+    display: flex;
+  }
+  .pwa-install-prompt.show ~ .app {
+    padding-top: 60px;
+  }
+  .pwa-install-prompt .pwa-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+  .pwa-install-prompt .pwa-title {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .pwa-install-prompt .pwa-desc {
+    font-size: 13px;
+    opacity: 0.95;
+  }
+  .pwa-install-prompt button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pwa-install-prompt .install-btn {
+    background: white;
+    color: #0066cc;
+  }
+  .pwa-install-prompt .close-btn {
+    background: transparent;
+    color: white;
+    opacity: 0.8;
+  }
 </style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0066cc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Portal Cond.">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDE4MCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiByeD0iNDUiIGZpbGw9IiMwMDY2Y2MiLz4KPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iODYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkM8L3RleHQ+Cjwvc3ZnPg==">
 </head>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <body>
+<div class="pwa-install-prompt" id="pwaPrompt">
+  <div class="pwa-text">
+    <div class="pwa-title">Instale o app</div>
+    <div class="pwa-desc">Acesse mais rápido, direto da tela inicial do celular.</div>
+  </div>
+  <button class="install-btn" id="pwaInstallBtn">Instalar</button>
+  <button class="close-btn" id="pwaCloseBtn">✕</button>
+</div>
 <div class="app" id="app"></div>
 
 <script>
+/* ---------- PWA - Instalação e Service Worker ---------- */
+let deferredPrompt = null;
+
+// Registrar service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(registration => {
+      console.log('Service Worker registrado:', registration);
+    }).catch(err => {
+      console.log('Erro ao registrar Service Worker:', err);
+    });
+  });
+}
+
+// Configurar o prompt de instalação do PWA
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwaPrompt').classList.add('show');
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('App instalado com sucesso!');
+  deferredPrompt = null;
+  document.getElementById('pwaPrompt').classList.remove('show');
+});
+
+document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    deferredPrompt = null;
+  }
+});
+
+document.getElementById('pwaCloseBtn')?.addEventListener('click', () => {
+  document.getElementById('pwaPrompt').classList.remove('show');
+});
+
 /* ---------- conexão com o servidor real (substitui a memória do Claude) ----------
    Se BACKEND_URL_PADRAO e BACKEND_API_KEY_PADRAO estiverem preenchidos
    abaixo, TODO MUNDO que abrir este arquivo usa essa conexão automaticamente
@@ -238,8 +357,6 @@ let sindicoAuth = false;
 let sindicoTab = 'inbox';       // inbox | enviar | moradores | config
 let filtroInbox = 'todas';
 let mensagemAberta = null;
-let analiseIAResultados = {};  // { [mensagemId]: texto da análise }
-let analiseIAEmAndamento = null; // id da mensagem sendo analisada no momento
 let toastMsg = null;
 let carregando = true;
 
@@ -257,7 +374,7 @@ let senhaAtual = '';
 let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
 
 function defaultConfig(){
-  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null };
+  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false };
 }
 let config = defaultConfig();
 
@@ -288,8 +405,7 @@ async function storageGet(key) {
 }
 async function storageSet(key, value) {
   if(backendConfig){
-    const r = await chamarBackend('/api/kv/set', { key, value });
-    if(r && r.erro) throw new Error(r.erro);
+    await chamarBackend('/api/kv/set', { key, value });
   } else {
     await window.storage.set(key, value, true);
   }
@@ -333,49 +449,33 @@ function resetSessionState(){
   view='morador'; sindicoAuth=false; sindicoTab='inbox'; filtroInbox='todas'; mensagemAberta=null;
   moradorAuth=null; gateUnidade=''; gateCodigo=''; moradorTab='mensagem'; pinValue='';
   formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
-  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false };
+  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
   visitanteFiltro='todos';
-  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true; broadcastAnexoData=null; broadcastAnexoNome='';
+  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
 }
 
-/* ---- funções de edição (usam prompt/confirm nativos, sem modal customizado) ---- */
+/* ---- funções de edição ---- */
 function abrirModalEditarCondominio(){
-  const novoNome = window.prompt('Nome do condomínio:', config.nomeCondominio || '');
-  if(novoNome === null) return; // cancelado
-  const novoEmail = window.prompt('E-mail de contato:', config.emailEndereco || '');
-  if(novoEmail === null) return;
-  config.nomeCondominio = (novoNome || '').trim() || config.nomeCondominio;
-  config.emailEndereco = (novoEmail || '').trim();
-  salvarEdicaoCondominio();
+  modalEdicao = 'condominio';
+  mostrarModal();
 }
 function abrirModalEditarMorador(morador){
-  const nome = window.prompt('Nome do morador:', morador.nome || '');
-  if(nome === null) return;
-  const unidade = window.prompt('Unidade:', morador.unidade || '');
-  if(unidade === null) return;
-  const whatsapp = window.prompt('WhatsApp:', morador.whatsapp || '');
-  if(whatsapp === null) return;
-  const email = window.prompt('E-mail:', morador.email || '');
-  if(email === null) return;
-  const codigo = window.prompt('Código de acesso:', morador.codigo || '');
-  if(codigo === null) return;
-  residenteEdicao = {...morador, nome, unidade, whatsapp, email, codigo};
-  salvarEdicaoMorador();
+  residenteEdicao = {...morador};
+  modalEdicao = 'morador';
+  mostrarModal();
 }
 function abrirModalAlterarSenha(){
-  const nova = window.prompt('Nova senha (mínimo 4 caracteres):', '');
-  if(nova === null) return;
-  const confirmar = window.prompt('Confirme a nova senha:', '');
-  if(confirmar === null) return;
-  novaSenh = nova;
-  confirmarSenha = confirmar;
-  executarAlterarSenha();
+  novaSenh = '';
+  confirmarSenha = '';
+  senhaAtual = '';
+  modalEdicao = 'alterar-senha';
+  mostrarModal();
 }
 function abrirModalResetSenha(){
-  if(window.confirm('Tem certeza que deseja resetar a senha do síndico para 1234?')){
-    executarResetSenha();
-  }
+  senhaAtual = '';
+  modalEdicao = 'reset-senha';
+  mostrarModal();
 }
 function fecharModal(){
   modalEdicao = null;
@@ -383,15 +483,15 @@ function fecharModal(){
   novaSenh = '';
   confirmarSenha = '';
   senhaAtual = '';
+  const backdrop = document.getElementById('modal-backdrop');
+  if(backdrop) backdrop.style.display = 'none';
 }
 async function salvarEdicaoCondominio(){
   config.nomeCondominio = config.nomeCondominio.trim();
   if(!config.nomeCondominio){ showToast('Informe o nome do condomínio.'); return; }
-  try{
-    await saveConfig();
-    fecharModal();
-    showToast('Condomínio atualizado!');
-  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
+  await saveConfig();
+  fecharModal();
+  showToast('Condomínio atualizado!');
 }
 async function salvarEdicaoMorador(){
   residenteEdicao.nome = residenteEdicao.nome.trim();
@@ -404,141 +504,29 @@ async function salvarEdicaoMorador(){
   const idx = residents.findIndex(r=>r.id === residenteEdicao.id);
   if(idx >= 0){
     residents[idx] = residenteEdicao;
-    try{
-      await saveResidents();
-      fecharModal();
-      showToast('Morador atualizado!');
-    }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
+    await saveResidents();
+    fecharModal();
+    showToast('Morador atualizado!');
   }
 }
 async function executarAlterarSenha(){
   if(!novaSenh.trim()){ showToast('Defina uma nova senha.'); return; }
   if(novaSenh !== confirmarSenha){ showToast('As senhas não conferem.'); return; }
   if(novaSenh.length < 4){ showToast('A senha deve ter pelo menos 4 caracteres.'); return; }
-  const morador = residents.find(r=>r.unidade === (moradorAuth && moradorAuth.unidade));
-  if(!morador){ showToast('Não foi possível identificar o morador.'); return; }
-  morador.codigo = novaSenh;
-  residents = residents.map(r=>r.id===morador.id ? morador : r);
-  try{
-    await saveResidents();
-    fecharModal();
-    showToast('Senha alterada com sucesso!');
-  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
+  // o acesso do morador é unidade + código, então é o código que muda aqui
+  const morador = moradorAuth ? residents.find(r => normaliza(r.unidade) === normaliza(moradorAuth.unidade)) : null;
+  if(!morador){ showToast('Não consegui identificar sua unidade. Entre novamente.'); return; }
+  morador.codigo = novaSenh.trim();
+  await saveResidents();
+  fecharModal();
+  showToast('Código de acesso alterado com sucesso!');
 }
 async function executarResetSenha(){
   const novo = '1234';
   masterConfig.pin = novo;
-  try{
-    await saveMasterConfig();
-    fecharModal();
-    showToast('Senha do síndico resetada para: '+novo);
-  }catch(e){ showToast('Não foi possível salvar: ' + e.message); }
-}
-
-/* ---- exportação de dados ---- */
-function exportarMensagensExcel(){
-  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
-  const dados = messages.map(m=>({
-    'Data/Hora': new Date(m.criadoEm).toLocaleString('pt-BR'),
-    'Morador': m.nome || '—',
-    'Unidade': m.unidade || '—',
-    'Tipo': labelTipo(m.tipo) || '—',
-    'Mensagem': m.texto || '—',
-    'Status': m.resolvida ? 'Resolvida' : 'Pendente'
-  }));
-  const ws = XLSX.utils.json_to_sheet(dados);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Mensagens');
-  XLSX.writeFile(wb, `mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
-  showToast('Mensagens exportadas!');
-}
-
-function exportarVisitantesExcel(){
-  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
-  const dados = visitors.map(v=>({
-    'Data entrada': v.data || new Date(v.criadoEm).toLocaleDateString('pt-BR'),
-    'Hora entrada': v.entrada || '—',
-    'Data saída (prevista)': v.dataSaida || '—',
-    'Hora saída (prevista)': v.saida || '—',
-    'Morador': v.nomeMorador || '—',
-    'Unidade': v.unidade || '—',
-    'Nome do visitante': v.nomeVisitante || '—',
-    'CPF': v.cpf || '—',
-    'RG': v.rg || '—',
-    'Grau': v.grau || '—',
-    'Observação': v.observacao || '—'
-  }));
-  const ws = XLSX.utils.json_to_sheet(dados);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Visitantes');
-  XLSX.writeFile(wb, `visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
-  showToast('Visitantes exportados!');
-}
-
-function exportarMensagensPDF(){
-  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text('Relatório de Mensagens', 10, 10);
-  doc.setFontSize(10);
-  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
-  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
-  
-  let y = 35;
-  messages.forEach((m, i)=>{
-    if(y > 250){ doc.addPage(); y = 10; }
-    doc.setFontSize(9);
-    doc.text(`${i+1}. ${m.nome || 'Anônimo'} (${m.unidade || '—'}) - ${new Date(m.criadoEm).toLocaleString('pt-BR')}`, 10, y);
-    y += 5;
-    doc.setFontSize(8);
-    const linhas = doc.splitTextToSize(m.texto || '', 190);
-    linhas.forEach(linha=>{ 
-      if(y > 250){ doc.addPage(); y = 10; }
-      doc.text(linha, 10, y); 
-      y += 4;
-    });
-    y += 3;
-  });
-  
-  doc.save(`mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
-  showToast('Mensagens exportadas em PDF!');
-}
-
-function exportarVisitantesPDF(){
-  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text('Relatório de Visitantes', 10, 10);
-  doc.setFontSize(10);
-  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
-  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
-  
-  let y = 35;
-  visitors.forEach((v, i)=>{
-    if(y > 240){ doc.addPage(); y = 10; }
-    doc.setFontSize(9);
-    doc.text(`${i+1}. ${v.nomeVisitante} - Apt ${v.unidade} (${new Date(v.criadoEm).toLocaleDateString('pt-BR')})`, 10, y);
-    y += 5;
-    doc.setFontSize(8);
-    doc.text(`CPF: ${v.cpf || '—'} | RG: ${v.rg || '—'} | Grau: ${v.grau || '—'}`, 10, y);
-    y += 4;
-    doc.text(`Entrada: ${v.data || '—'} ${v.entrada || ''} | Saída prevista: ${v.dataSaida || '—'} ${v.saida || ''}`, 10, y);
-    y += 4;
-    if(v.observacao){
-      const linhasObs = doc.splitTextToSize('Observação: ' + v.observacao, 190);
-      linhasObs.forEach(linha=>{
-        if(y > 250){ doc.addPage(); y = 10; }
-        doc.text(linha, 10, y);
-        y += 4;
-      });
-    }
-    y += 2;
-  });
-  
-  doc.save(`visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
-  showToast('Visitantes exportados em PDF!');
+  await saveMasterConfig();
+  fecharModal();
+  showToast('Senha do síndico resetada para: '+novo);
 }
 
 async function initApp(){
@@ -631,58 +619,6 @@ async function loadCondoData(condoId){
 
 async function saveConfig(){
   await storageSet('config:'+condoAtual, JSON.stringify(config));
-}
-async function salvarConfigComToast(msgOk){
-  try{ await saveConfig(); showToast(msgOk); }
-  catch(e){ showToast('Não foi possível salvar: ' + e.message); }
-}
-async function uploadRegimento(file){
-  if(!file) return;
-  if(file.size > 4*1024*1024){ showToast('Arquivo muito grande (máx. 4MB).'); return; }
-  const reader = new FileReader();
-  reader.onload = async (e)=>{
-    const regimentoAnterior = config.regimento;
-    config.regimento = {
-      nome: file.name,
-      tipo: file.type,
-      tamanho: file.size,
-      data: e.target.result // base64
-    };
-    try{
-      await saveConfig();
-      showToast('Regimento enviado com sucesso!');
-    }catch(err){
-      config.regimento = regimentoAnterior;
-      showToast('Não foi possível enviar o regimento: ' + err.message);
-    }
-    render();
-  };
-  reader.onerror = ()=> showToast('Erro ao ler o arquivo.');
-  reader.readAsDataURL(file);
-}
-function downloadRegimento(){
-  if(!config.regimento){
-    showToast('Nenhum regimento anexado.');
-    return;
-  }
-  const link = document.createElement('a');
-  link.href = config.regimento.data;
-  link.download = config.regimento.nome;
-  link.click();
-}
-async function removerRegimento(){
-  if(confirm('Tem certeza que deseja remover o regimento?')){
-    const anterior = config.regimento;
-    config.regimento = null;
-    try{
-      await saveConfig();
-      showToast('Regimento removido.');
-    }catch(e){
-      config.regimento = anterior;
-      showToast('Não foi possível remover: ' + e.message);
-    }
-    render();
-  }
 }
 async function saveResidents(){
   await storageSet('residents:'+condoAtual, JSON.stringify(residents));
@@ -963,10 +899,7 @@ function renderMasterPanel(){
   masterPinCard.appendChild(mpField);
   const mpBtn = document.createElement('button');
   mpBtn.className='btn btn-ghost'; mpBtn.textContent='Salvar senha';
-  mpBtn.onclick = async ()=>{
-    try{ await saveMasterConfig(); showToast('Senha de administrador atualizada.'); }
-    catch(e){ showToast('Não foi possível salvar: ' + e.message); }
-  };
+  mpBtn.onclick = async ()=>{ await saveMasterConfig(); showToast('Senha de administrador atualizada.'); };
   masterPinCard.appendChild(mpBtn);
   wrap.appendChild(masterPinCard);
 
@@ -1224,9 +1157,10 @@ function renderMensagemForm(){
       messages.unshift(msg);
       formState.enviado = true;
       if(backendConfig){
-        let anexo = null;
-        if(msg.imagemData) anexo = { dataUrl: msg.imagemData, nome: 'foto.jpg' };
-        else if(msg.videoData) anexo = { dataUrl: msg.videoData, nome: 'video.mp4' };
+        // manda foto E vídeo juntos (antes só ia um dos dois) e avisa se o e-mail falhar
+        const anexos = [];
+        if(msg.imagemData) anexos.push({ dataUrl: msg.imagemData, nome: formState.imagemNome || 'foto.jpg' });
+        if(msg.videoData) anexos.push({ dataUrl: msg.videoData, nome: formState.videoNome || 'video.mp4' });
         chamarBackend('/api/notificar-sindico', {
           canalWhatsapp: config.whatsappAtivo,
           canalEmail: config.emailAtivo,
@@ -1234,7 +1168,11 @@ function renderMensagemForm(){
           emailPara: config.emailEndereco,
           assunto: 'Nova ' + labelTipo(msg.tipo).toLowerCase() + ' — ' + msg.unidade,
           mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto,
-          anexo
+          anexos
+        }).then(r=>{
+          if(r && r.email && r.email.enviado === false){
+            showToast('Mensagem registrada, mas o e-mail falhou: ' + r.email.erro);
+          }
         });
       }
     }catch(e){
@@ -1249,7 +1187,7 @@ function renderMensagemForm(){
   return wrap;
 }
 
-let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false };
+let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
 
 function renderVisitanteForm(){
   const wrap = document.createElement('div');
@@ -1265,7 +1203,7 @@ function renderVisitanteForm(){
     const btn = document.createElement('button');
     btn.className='btn btn-ghost';
     btn.textContent='Cadastrar outro visitante';
-    btn.onclick = ()=>{ visitorFormState = { nomeMorador: moradorAuth ? moradorAuth.nomeSugerido : '', unidade: moradorAuth ? moradorAuth.unidade : '', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', dataSaida:'', saida:'', observacao:'', enviando:false, enviado:false }; render(); };
+    btn.onclick = ()=>{ visitorFormState = { nomeMorador: moradorAuth ? moradorAuth.nomeSugerido : '', unidade: moradorAuth ? moradorAuth.unidade : '', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false }; render(); };
     c.appendChild(btn);
     wrap.appendChild(c);
     return wrap;
@@ -1344,42 +1282,28 @@ function renderVisitanteForm(){
 
   const row3 = document.createElement('div');
   row3.className='row2';
-  const dataField = field('Data de entrada', null);
+  const dataField = field('Data da visita', null);
   const dataInput = document.createElement('input');
   dataInput.type='text'; dataInput.inputMode='numeric'; dataInput.placeholder='dd/mm/aaaa'; dataInput.value=visitorFormState.data;
   dataInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.data = m; };
   dataField.appendChild(dataInput);
+  row3.appendChild(dataField);
+  card.appendChild(row3);
+
+  const row4 = document.createElement('div');
+  row4.className='row2';
   const entradaField = field('Horário de entrada', null);
   const entradaInput = document.createElement('input');
   entradaInput.type='text'; entradaInput.inputMode='numeric'; entradaInput.placeholder='14:00'; entradaInput.value=visitorFormState.entrada;
   entradaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.entrada = m; };
   entradaField.appendChild(entradaInput);
-  row3.appendChild(dataField); row3.appendChild(entradaField);
-  card.appendChild(row3);
-
-  const row4 = document.createElement('div');
-  row4.className='row2';
-  const dataSaidaField = field('Data prevista de saída', null);
-  const dataSaidaInput = document.createElement('input');
-  dataSaidaInput.type='text'; dataSaidaInput.inputMode='numeric'; dataSaidaInput.placeholder='dd/mm/aaaa'; dataSaidaInput.value=visitorFormState.dataSaida;
-  dataSaidaInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.dataSaida = m; };
-  dataSaidaField.appendChild(dataSaidaInput);
   const saidaField = field('Horário de saída (previsto)', null);
   const saidaInput = document.createElement('input');
   saidaInput.type='text'; saidaInput.inputMode='numeric'; saidaInput.placeholder='18:00'; saidaInput.value=visitorFormState.saida;
   saidaInput.oninput = e=>{ const m = maskHora(e.target.value); e.target.value=m; visitorFormState.saida = m; };
   saidaField.appendChild(saidaInput);
-  row4.appendChild(dataSaidaField); row4.appendChild(saidaField);
+  row4.appendChild(entradaField); row4.appendChild(saidaField);
   card.appendChild(row4);
-
-  const obsField = field('Observação (opcional)', null);
-  const obsTa = document.createElement('textarea');
-  obsTa.value = visitorFormState.observacao;
-  obsTa.placeholder = 'Ex: prestador vai ficar hospedado até sexta-feira, ou: serviço de manutenção do ar-condicionado.';
-  obsTa.rows = 3;
-  obsTa.oninput = e=> visitorFormState.observacao = e.target.value;
-  obsField.appendChild(obsTa);
-  card.appendChild(obsField);
 
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
@@ -1411,9 +1335,7 @@ function renderVisitanteForm(){
       grau: visitorFormState.grau,
       data: visitorFormState.data.trim(),
       entrada: visitorFormState.entrada.trim(),
-      dataSaida: visitorFormState.dataSaida.trim(),
       saida: visitorFormState.saida.trim(),
-      observacao: visitorFormState.observacao.trim(),
       criadoEm: Date.now(),
       status: 'pendente'
     };
@@ -1428,7 +1350,7 @@ function renderVisitanteForm(){
           whatsappPara: config.whatsappNumero,
           emailPara: config.emailEndereco,
           assunto: 'Novo visitante cadastrado — ' + v.unidade,
-          mensagem: 'Visitante: ' + v.nomeVisitante + ' (' + labelGrau(v.grau) + ') autorizado por ' + v.nomeMorador + ' — ' + v.unidade + (v.data ? ' em ' + v.data : '') + (v.entrada ? ', entrada às ' + v.entrada : '') + (v.dataSaida ? ', saída prevista ' + v.dataSaida : '') + (v.saida ? ' às ' + v.saida : '') + '.' + (v.observacao ? ('\n\nObservação: ' + v.observacao) : '')
+          mensagem: 'Visitante: ' + v.nomeVisitante + ' (' + labelGrau(v.grau) + ') autorizado por ' + v.nomeMorador + ' — ' + v.unidade + (v.data ? ' em ' + v.data : '') + (v.entrada ? ', entrada às ' + v.entrada : '') + '.'
         });
       }
     }catch(e){
@@ -1544,18 +1466,6 @@ function renderInbox(){
   });
   card.appendChild(toolbar);
 
-  // Botões de exportação
-  const exportDiv = document.createElement('div');
-  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
-  const expExcelBtn = document.createElement('button');
-  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
-  expExcelBtn.onclick = ()=> exportarMensagensExcel();
-  const expPdfBtn = document.createElement('button');
-  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
-  expPdfBtn.onclick = ()=> exportarMensagensPDF();
-  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
-  card.appendChild(exportDiv);
-
   let list = messages;
   if(filtroInbox==='naoLidas') list = list.filter(m=>!m.lida);
   else if(filtroInbox!=='todas') list = list.filter(m=>m.tipo===filtroInbox);
@@ -1609,7 +1519,7 @@ function renderInbox(){
       detailCard.appendChild(vid);
     }
     const actions = document.createElement('div');
-    actions.style.marginTop='16px'; actions.style.display='flex'; actions.style.gap='8px'; actions.style.flexWrap='wrap';
+    actions.style.marginTop='16px'; actions.style.display='flex'; actions.style.gap='8px';
     const resolveBtn = document.createElement('button');
     resolveBtn.className='btn btn-ghost';
     resolveBtn.textContent = m.resolvida ? 'Reabrir' : 'Marcar como resolvida';
@@ -1624,23 +1534,7 @@ function renderInbox(){
       render();
     };
     actions.appendChild(resolveBtn); actions.appendChild(delBtn);
-    if(m.tipo === 'reclamacao'){
-      const analiseBtn = document.createElement('button');
-      analiseBtn.className='btn btn-ghost';
-      analiseBtn.textContent = analiseIAEmAndamento === m.id ? 'Analisando...' : '🔍 Analisar com IA';
-      analiseBtn.disabled = analiseIAEmAndamento === m.id;
-      analiseBtn.onclick = ()=> analisarReclamacaoComIA(m);
-      actions.appendChild(analiseBtn);
-    }
     detailCard.appendChild(actions);
-    if(m.tipo === 'reclamacao' && analiseIAResultados[m.id]){
-      const analiseBox = document.createElement('div');
-      analiseBox.style.marginTop='14px'; analiseBox.style.padding='12px 14px';
-      analiseBox.style.background='var(--sky-bg)'; analiseBox.style.borderRadius='var(--radius)';
-      analiseBox.style.fontSize='13.5px'; analiseBox.style.whiteSpace='pre-wrap';
-      analiseBox.innerHTML = `<strong>Análise da IA (com base no regimento):</strong><br>${escapeHtml(analiseIAResultados[m.id])}`;
-      detailCard.appendChild(analiseBox);
-    }
   }
   right.appendChild(detailCard);
   grid.appendChild(right);
@@ -1648,31 +1542,6 @@ function renderInbox(){
   return grid;
 }
 function labelTipo(t){ return t==='reclamacao'?'Reclamação':t==='sugestao'?'Sugestão':'Elogio'; }
-async function analisarReclamacaoComIA(m){
-  if(!config.regimento){
-    showToast('Anexe o regimento em Configurações antes de analisar.');
-    return;
-  }
-  if(!backendConfig){
-    showToast('Conecte o servidor em Configurações para usar a análise por IA.');
-    return;
-  }
-  analiseIAEmAndamento = m.id;
-  render();
-  const resultado = await chamarBackend('/api/analisar-reclamacao', {
-    mensagem: m.texto,
-    regimento: config.regimento
-  });
-  analiseIAEmAndamento = null;
-  if(resultado && resultado.erro){
-    showToast('Não foi possível analisar: ' + resultado.erro);
-  } else if(resultado && resultado.analise){
-    analiseIAResultados[m.id] = resultado.analise;
-  } else {
-    showToast('A análise não retornou resultado.');
-  }
-  render();
-}
 function confereComCadastro(nome, unidade){
   if(residents.length===0) return true; // sem cadastro de moradores ainda, não há o que cruzar
   return residents.some(r => normaliza(r.unidade)===normaliza(unidade) && normaliza(r.nome)===normaliza(nome));
@@ -1699,18 +1568,6 @@ function renderVisitantes(){
   });
   card.appendChild(toolbar);
 
-  // Botões de exportação
-  const exportDiv = document.createElement('div');
-  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
-  const expExcelBtn = document.createElement('button');
-  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
-  expExcelBtn.onclick = ()=> exportarVisitantesExcel();
-  const expPdfBtn = document.createElement('button');
-  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
-  expPdfBtn.onclick = ()=> exportarVisitantesPDF();
-  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
-  card.appendChild(exportDiv);
-
   let list = visitors;
   if(visitanteFiltro!=='todos') list = list.filter(v=>v.status===visitanteFiltro);
 
@@ -1726,8 +1583,7 @@ function renderVisitantes(){
         <div><span class="pill pill-${v.status}">${labelStatus(v.status)}</span> ${!confereComCadastro(v.nomeMorador,v.unidade) ? '<span class="pill pill-alerta">Morador não confere com cadastro</span> ' : ''}<strong style="font-size:13.5px">${escapeHtml(v.nomeVisitante)}</strong> <span class="meta">· ${labelGrau(v.grau)}</span></div>
         <div class="meta" style="margin-top:4px">${v.cpf ? 'CPF: '+escapeHtml(v.cpf)+(validaCPF(v.cpf) ? '' : ' (dígito não confere)') : ''}${v.cpf && v.rg ? ' · ' : ''}${v.rg ? 'RG: '+escapeHtml(v.rg) : ''}</div>
         <div class="meta">Morador: ${escapeHtml(v.nomeMorador)} · ${escapeHtml(v.unidade)}</div>
-        <div class="meta">${v.data ? 'Data: '+escapeHtml(v.data)+' · ' : ''}Entrada: ${escapeHtml(v.entrada||'—')} · Saída: ${escapeHtml(v.saida||'—')}${v.dataSaida ? ' ('+escapeHtml(v.dataSaida)+')' : ''}</div>
-        ${v.observacao ? '<div class="meta" style="white-space:pre-wrap">Observação: '+escapeHtml(v.observacao)+'</div>' : ''}
+        <div class="meta">${v.data ? 'Data: '+escapeHtml(v.data)+' · ' : ''}Entrada: ${escapeHtml(v.entrada||'—')} · Saída: ${escapeHtml(v.saida||'—')}</div>
         <div class="meta">Cadastrado em ${fmtData(v.criadoEm)}</div>
       `;
       const actions = document.createElement('div');
@@ -1754,10 +1610,18 @@ function labelGrau(g){
 /* ---- enviar mensagem (broadcast) ---- */
 let broadcastSelecionados = new Set();
 let broadcastTexto = '';
+let broadcastAssunto = '';
 let broadcastCanalWA = true;
 let broadcastCanalEmail = true;
-let broadcastAnexoData = null;
-let broadcastAnexoNome = '';
+let broadcastAnexos = []; // array de {nome, dataUrl, tamanhoMB}
+let broadcastMostrarLinks = false; // para mostrar/esconder os links de WhatsApp
+
+// Gera um link do WhatsApp com a mensagem pré-preenchida
+function gerarLinkWhatsApp(numero, mensagem){
+  const numeroNormalizado = normalizarNumeroBR(numero);
+  const mensagemCodificada = encodeURIComponent(mensagem);
+  return `https://wa.me/${numeroNormalizado.replace(/\D/g, '')}?text=${mensagemCodificada}`;
+}
 
 function renderEnviar(){
   const wrap = document.createElement('div');
@@ -1768,7 +1632,7 @@ function renderEnviar(){
   const warn = document.createElement('div');
   warn.className='warn';
   warn.textContent = backendConfig
-    ? 'O envio real por WhatsApp e e-mail está conectado. Alguns destinatários podem não receber se o número/e-mail cadastrado estiver errado, ou se o WhatsApp ainda estiver no Sandbox de testes.'
+    ? 'O envio por e-mail está conectado e funcionando. O envio por WhatsApp está em construção — será liberado quando o condomínio autorizar a contratação do WhatsApp Business.'
     : 'O envio real por WhatsApp e e-mail ainda não está conectado (ver Configurações → Conexão com o servidor de envio). Por enquanto, a mensagem só fica registrada aqui.';
   card.appendChild(warn);
 
@@ -1820,38 +1684,157 @@ function renderEnviar(){
   msgField.appendChild(ta);
   card.appendChild(msgField);
 
-  // anexo (opcional): foto, PDF ou documento
-  const anexoField = field('Anexo — foto, PDF ou documento (opcional)', null);
-  const anexoBox = document.createElement('div');
-  anexoBox.className = 'filebox' + (broadcastAnexoData ? ' has' : '');
-  anexoBox.textContent = broadcastAnexoData ? ('Anexado: '+broadcastAnexoNome) : 'Nenhum arquivo selecionado';
-  const anexoInput = document.createElement('input');
-  anexoInput.type='file';
-  anexoInput.accept='image/*,application/pdf,.doc,.docx,.txt';
-  anexoInput.style.marginTop='8px'; anexoInput.style.display='block';
-  anexoInput.onchange = async e=>{
-    const f = e.target.files[0]; if(!f) return;
-    if(f.size > 8*1024*1024){ showToast('Arquivo muito grande (máx. 8MB).'); e.target.value=''; return; }
-    broadcastAnexoData = await fileToBase64(f);
-    broadcastAnexoNome = f.name;
-    render();
-  };
-  anexoField.appendChild(anexoBox);
-  anexoField.appendChild(anexoInput);
-  if(broadcastAnexoData){
-    const rmAnexo = document.createElement('button');
-    rmAnexo.className='btn btn-ghost'; rmAnexo.style.marginTop='8px'; rmAnexo.style.fontSize='12px';
-    rmAnexo.textContent='Remover anexo';
-    rmAnexo.onclick = ()=>{ broadcastAnexoData=null; broadcastAnexoNome=''; render(); };
-    anexoField.appendChild(rmAnexo);
-  }
-  card.appendChild(anexoField);
+  const assuntoField = field('Assunto (opcional)', null);
+  const assuntoInput = document.createElement('input');
+  assuntoInput.type='text'; assuntoInput.value=broadcastAssunto;
+  assuntoInput.placeholder='Ex: Comunicado importante, Aviso de manutenção...';
+  assuntoInput.oninput = e=> broadcastAssunto = e.target.value;
+  assuntoField.appendChild(assuntoInput);
+  card.appendChild(assuntoField);
 
   const channels = document.createElement('div');
   channels.style.display='flex'; channels.style.gap='18px'; channels.style.margin='4px 0 18px';
   channels.appendChild(checkboxLabel('WhatsApp', broadcastCanalWA, v=>broadcastCanalWA=v));
   channels.appendChild(checkboxLabel('E-mail', broadcastCanalEmail, v=>broadcastCanalEmail=v));
   card.appendChild(channels);
+
+  // Seção de links de WhatsApp
+  if(broadcastSelecionados.size > 0 && broadcastTexto.trim()){
+    const linksSection = document.createElement('div');
+    linksSection.style.margin='18px 0'; linksSection.style.padding='12px';
+    linksSection.style.background='#f9f9f9'; linksSection.style.border='1px solid #ddd';
+    linksSection.style.borderRadius='4px';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type='button'; toggleBtn.style.marginBottom='12px'; toggleBtn.className='btn btn-ghost';
+    toggleBtn.textContent = (broadcastMostrarLinks ? '▼' : '▶') + ' Links de WhatsApp para compartilhar';
+    toggleBtn.onclick = ()=>{ broadcastMostrarLinks = !broadcastMostrarLinks; render(); };
+    linksSection.appendChild(toggleBtn);
+
+    if(broadcastMostrarLinks){
+      const info = document.createElement('div');
+      info.style.fontSize='12px'; info.style.marginBottom='12px'; info.style.color='#666';
+      info.textContent = 'Clique em um link para abrir o WhatsApp com a mensagem pré-preenchida. Você também pode copiar o link para compartilhar.';
+      linksSection.appendChild(info);
+
+      const linksList = document.createElement('div');
+      linksList.style.maxHeight='300px'; linksList.style.overflowY='auto';
+
+      [...broadcastSelecionados].forEach(residentId=>{
+        const resident = residents.find(r=>r.id===residentId);
+        if(!resident || !resident.whatsapp) return;
+
+        const linkItem = document.createElement('div');
+        linkItem.style.display='flex'; linkItem.style.justifyContent='space-between';
+        linkItem.style.alignItems='center'; linkItem.style.padding='10px';
+        linkItem.style.marginBottom='8px'; linkItem.style.background='white';
+        linkItem.style.borderRadius='4px'; linkItem.style.border='1px solid #e0e0e0';
+
+        const info = document.createElement('div');
+        info.style.flex='1';
+        const nome = document.createElement('div');
+        nome.style.fontWeight='600'; nome.style.fontSize='14px';
+        nome.textContent = escapeHtml(resident.nome);
+        const unidade = document.createElement('div');
+        unidade.style.fontSize='12px'; unidade.style.color='#666';
+        unidade.textContent = escapeHtml(resident.unidade);
+        info.appendChild(nome);
+        info.appendChild(unidade);
+        linkItem.appendChild(info);
+
+        const btnGroup = document.createElement('div');
+        btnGroup.style.display='flex'; btnGroup.style.gap='6px';
+
+        const linkBtn = document.createElement('button');
+        linkBtn.type='button'; linkBtn.className='btn btn-ghost'; linkBtn.textContent='Abrir WhatsApp';
+        linkBtn.style.fontSize='12px'; linkBtn.style.padding='6px 12px';
+        linkBtn.onclick = ()=>{
+          const link = gerarLinkWhatsApp(resident.whatsapp, broadcastTexto);
+          window.open(link, '_blank');
+        };
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type='button'; copyBtn.className='btn btn-ghost'; copyBtn.textContent='Copiar link';
+        copyBtn.style.fontSize='12px'; copyBtn.style.padding='6px 12px';
+        copyBtn.onclick = ()=>{
+          const link = gerarLinkWhatsApp(resident.whatsapp, broadcastTexto);
+          navigator.clipboard.writeText(link);
+          showToast('Link copiado para a área de transferência!');
+        };
+
+        btnGroup.appendChild(linkBtn);
+        btnGroup.appendChild(copyBtn);
+        linkItem.appendChild(btnGroup);
+        linksList.appendChild(linkItem);
+      });
+
+      if(linksList.children.length === 0){
+        const empty = document.createElement('div');
+        empty.style.padding='12px'; empty.style.color='#999'; empty.style.textAlign='center';
+        empty.textContent = 'Nenhum morador selecionado com WhatsApp.';
+        linksSection.appendChild(empty);
+      } else {
+        linksSection.appendChild(linksList);
+      }
+    }
+    card.appendChild(linksSection);
+  }
+
+  /* ---- Seção de anexos ---- */
+  const anexosField = field('Anexos (documentos, imagens, PDFs) — opcional', null);
+  const anexosBox = document.createElement('div');
+  anexosBox.style.marginTop='8px';
+
+  // Lista de anexos selecionados
+  if(broadcastAnexos.length > 0){
+    const lista = document.createElement('div');
+    lista.style.marginBottom='12px';
+    broadcastAnexos.forEach((anexo, idx)=>{
+      const item = document.createElement('div');
+      item.style.display='flex'; item.style.justifyContent='space-between'; item.style.alignItems='center';
+      item.style.padding='8px'; item.style.background='#f0f8f0'; item.style.borderRadius='4px';
+      item.style.marginBottom='6px'; item.style.fontSize='13px';
+      const info = document.createElement('span');
+      info.textContent = anexo.nome + ' (' + anexo.tamanhoMB.toFixed(1) + 'MB)';
+      const btnRemove = document.createElement('button');
+      btnRemove.type='button'; btnRemove.textContent='✕'; btnRemove.style.border='none';
+      btnRemove.style.background='none'; btnRemove.style.cursor='pointer'; btnRemove.style.fontSize='14px';
+      btnRemove.onclick = ()=>{ broadcastAnexos.splice(idx,1); render(); };
+      item.appendChild(info);
+      item.appendChild(btnRemove);
+      lista.appendChild(item);
+    });
+    anexosBox.appendChild(lista);
+  }
+
+  // Input de arquivo
+  const anexoInput = document.createElement('input');
+  anexoInput.type='file'; anexoInput.multiple=true; anexoInput.accept='*/*';
+  anexoInput.style.display='block'; anexoInput.style.marginTop='8px';
+  anexoInput.onchange = async e=>{
+    const files = Array.from(e.target.files || []);
+    for(const f of files){
+      if(broadcastAnexos.length >= 3){
+        showToast('Máximo 3 anexos permitidos.');
+        break;
+      }
+      if(f.size > 5*1024*1024){
+        showToast('Arquivo "'+f.name+'" é muito grande (máx. 5MB).');
+        continue;
+      }
+      const dataUrl = await fileToBase64(f);
+      broadcastAnexos.push({
+        nome: f.name,
+        dataUrl: dataUrl,
+        tamanhoMB: f.size / (1024*1024)
+      });
+    }
+    e.target.value='';
+    render();
+  };
+  anexosBox.appendChild(anexoInput);
+  anexosField.appendChild(anexosBox);
+  card.appendChild(anexosField);
 
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
@@ -1862,13 +1845,13 @@ function renderEnviar(){
     const bc = {
       id: uid(),
       texto: broadcastTexto.trim(),
+      assunto: broadcastAssunto.trim() || (config.nomeCondominio || 'Condomínio') + ' — comunicado',
       destinatarios: [...broadcastSelecionados],
       canalWhatsapp: broadcastCanalWA,
       canalEmail: broadcastCanalEmail,
-      anexoData: broadcastAnexoData,
-      anexoNome: broadcastAnexoNome,
       criadoEm: Date.now(),
-      status: 'pendente_integracao'
+      status: 'pendente_integracao',
+      anexos: broadcastAnexos.length > 0 ? broadcastAnexos : null
     };
     await storageSet('broadcasts:'+condoAtual+':'+bc.id, JSON.stringify(bc));
     const totalDestinatarios = bc.destinatarios.length;
@@ -1878,14 +1861,13 @@ function renderEnviar(){
         .map(id => residents.find(r=>r.id===id))
         .filter(Boolean)
         .map(r => ({ nome:r.nome, whatsapp:r.whatsapp, email:r.email }));
-      const anexo = bc.anexoData ? { dataUrl: bc.anexoData, nome: bc.anexoNome || 'anexo' } : null;
       const resultado = await chamarBackend('/api/enviar-broadcast', {
         mensagem: bc.texto,
         canalWhatsapp: bc.canalWhatsapp,
         canalEmail: bc.canalEmail,
-        assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
+        assunto: bc.assunto,
         destinatarios: destinatariosInfo,
-        anexos: anexo ? [anexo] : []
+        anexos: broadcastAnexos.length > 0 ? broadcastAnexos : undefined
       });
       btn.disabled = false;
       if(resultado && resultado.erro){
@@ -1893,17 +1875,18 @@ function renderEnviar(){
       } else if(resultado && resultado.resultados){
         const okWA = resultado.resultados.filter(r=>r.whatsapp && r.whatsapp.enviado).length;
         const okEmail = resultado.resultados.filter(r=>r.email && r.email.enviado).length;
+        const waEmConstrucao = resultado.resultados.some(r=>r.whatsapp && r.whatsapp.emConstrucao);
         const partes = [];
-        if(bc.canalWhatsapp) partes.push(okWA+'/'+totalDestinatarios+' por WhatsApp');
-        if(bc.canalEmail) partes.push(okEmail+'/'+totalDestinatarios+' por e-mail');
-        showToast('Enviado: ' + partes.join(' · ') + '.');
+        if(bc.canalWhatsapp) partes.push(waEmConstrucao ? 'WhatsApp: em construção' : 'WhatsApp: '+okWA+'/'+totalDestinatarios);
+        if(bc.canalEmail) partes.push('E-mail: '+okEmail+'/'+totalDestinatarios);
+        showToast(partes.join(' · '));
       } else {
         showToast('Mensagem registrada para '+totalDestinatarios+' morador(es).');
       }
     } else {
       showToast('Mensagem registrada para '+totalDestinatarios+' morador(es). Configure o backend em Configurações para o envio real.');
     }
-    broadcastTexto=''; broadcastSelecionados=new Set(); broadcastAnexoData=null; broadcastAnexoNome='';
+    broadcastTexto=''; broadcastAssunto=''; broadcastSelecionados=new Set(); broadcastAnexos=[]; broadcastMostrarLinks=false;
     render();
   };
   card.appendChild(btn);
@@ -2020,7 +2003,7 @@ function renderConfig(){
   brandCard.appendChild(brandField);
   const brandSaveBtn = document.createElement('button');
   brandSaveBtn.className='btn btn-ghost'; brandSaveBtn.textContent='Salvar nome';
-  brandSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Nome atualizado.'); render(); };
+  brandSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Nome atualizado.'); render(); };
   brandCard.appendChild(brandSaveBtn);
   wrap.appendChild(brandCard);
 
@@ -2035,7 +2018,7 @@ function renderConfig(){
   pinCard.appendChild(pinField);
   const savePinBtn = document.createElement('button');
   savePinBtn.className='btn btn-ghost'; savePinBtn.textContent='Salvar PIN';
-  savePinBtn.onclick = async ()=>{ await salvarConfigComToast('PIN atualizado.'); };
+  savePinBtn.onclick = async ()=>{ await saveConfig(); showToast('PIN atualizado.'); };
   pinCard.appendChild(savePinBtn);
   wrap.appendChild(pinCard);
 
@@ -2045,7 +2028,7 @@ function renderConfig(){
   visitCard.appendChild(checkboxLabel('Exigir aprovação do síndico antes da entrada', config.aprovacaoObrigatoria, v=>{config.aprovacaoObrigatoria=v;}));
   const visitSaveBtn = document.createElement('button');
   visitSaveBtn.className='btn btn-ghost'; visitSaveBtn.style.marginTop='14px'; visitSaveBtn.textContent='Salvar';
-  visitSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de visitantes salva.'); };
+  visitSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de visitantes salva.'); };
   visitCard.appendChild(visitSaveBtn);
   wrap.appendChild(visitCard);
 
@@ -2053,7 +2036,7 @@ function renderConfig(){
   waCard.className='card';
   waCard.innerHTML = `<h2>WhatsApp</h2><p class="lead">Número usado para receber e enviar mensagens dos moradores.</p>`;
   const waWarn = document.createElement('div'); waWarn.className='warn';
-  waWarn.textContent = 'Este painel guarda apenas o número de exibição. O token de acesso da API do WhatsApp Business precisa ficar em um back-end seguro (nunca em uma página acessada pelos moradores) — veja a explicação no fim desta página.';
+  waWarn.textContent = 'O envio por WhatsApp está em construção — depende da contratação de um número WhatsApp Business, que precisa de autorização do condomínio. O número abaixo já pode ficar cadastrado; ele será usado assim que o canal for liberado.';
   waCard.appendChild(waWarn);
   const waField = field('Número do WhatsApp do condomínio', null);
   const waInput = document.createElement('input');
@@ -2064,7 +2047,7 @@ function renderConfig(){
   waCard.appendChild(checkboxLabel('Canal WhatsApp ativo', config.whatsappAtivo, v=>{config.whatsappAtivo=v;}));
   const waSaveBtn = document.createElement('button');
   waSaveBtn.className='btn btn-ghost'; waSaveBtn.style.marginTop='14px'; waSaveBtn.textContent='Salvar';
-  waSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de WhatsApp salva.'); };
+  waSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de WhatsApp salva.'); };
   waCard.appendChild(waSaveBtn);
   wrap.appendChild(waCard);
 
@@ -2080,7 +2063,7 @@ function renderConfig(){
   emailCard.appendChild(checkboxLabel('Canal e-mail ativo', config.emailAtivo, v=>{config.emailAtivo=v;}));
   const emSaveBtn = document.createElement('button');
   emSaveBtn.className='btn btn-ghost'; emSaveBtn.style.marginTop='14px'; emSaveBtn.textContent='Salvar';
-  emSaveBtn.onclick = async ()=>{ await salvarConfigComToast('Configuração de e-mail salva.'); };
+  emSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configuração de e-mail salva.'); };
   emailCard.appendChild(emSaveBtn);
   wrap.appendChild(emailCard);
 
@@ -2096,50 +2079,6 @@ function renderConfig(){
   trocarBtn.onclick = ()=>{ esquecerConfigServidor(); };
   backendCard.appendChild(trocarBtn);
   wrap.appendChild(backendCard);
-
-  const regimentoCard = document.createElement('div');
-  regimentoCard.className='card';
-  regimentoCard.innerHTML = `<h2>Regimento do condomínio</h2><p class="lead">Anexe o regimento em PDF ou outro formato para referência ao analisar reclamações dos moradores.</p>`;
-  
-  if(config.regimento){
-    const regInfo = document.createElement('p');
-    regInfo.style.fontSize='14px'; regInfo.style.color='#666';
-    regInfo.textContent = `📄 Arquivo: ${config.regimento.nome} (${(config.regimento.tamanho/1024).toFixed(2)} KB)`;
-    regimentoCard.appendChild(regInfo);
-    
-    const btnDiv = document.createElement('div');
-    btnDiv.style.display='flex'; btnDiv.style.gap='8px'; btnDiv.style.flexWrap='wrap';
-    
-    const viewBtn = document.createElement('button');
-    viewBtn.className='btn btn-ghost'; viewBtn.textContent='Visualizar/Baixar';
-    viewBtn.onclick = ()=> downloadRegimento();
-    btnDiv.appendChild(viewBtn);
-    
-    const remBtn = document.createElement('button');
-    remBtn.className='btn btn-danger'; remBtn.textContent='Remover';
-    remBtn.onclick = ()=> removerRegimento();
-    btnDiv.appendChild(remBtn);
-    
-    regimentoCard.appendChild(btnDiv);
-  } else {
-    const p = document.createElement('p');
-    p.style.color='#999'; p.textContent='Nenhum arquivo enviado.';
-    regimentoCard.appendChild(p);
-  }
-  
-  const fileInput = document.createElement('input');
-  fileInput.type='file'; fileInput.style.display='none';
-  fileInput.accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png';
-  fileInput.onchange = (e)=>{ if(e.target.files[0]) uploadRegimento(e.target.files[0]); };
-  const uploadBtn = document.createElement('button');
-  uploadBtn.className='btn btn-primary'; uploadBtn.style.width='100%'; uploadBtn.style.marginTop='15px';
-  uploadBtn.type='button';
-  uploadBtn.textContent='Escolher arquivo';
-  uploadBtn.onclick = ()=> fileInput.click();
-  regimentoCard.appendChild(uploadBtn);
-  regimentoCard.appendChild(fileInput);
-  
-  wrap.appendChild(regimentoCard);
 
   return wrap;
 }
@@ -2201,5 +2140,128 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
   renderSetupGate();
 }
 </script>
+<script>
+function renderModal(){
+  const backdrop = document.getElementById('modal-backdrop');
+  if(!backdrop) return; // modal não existe na DOM, ignorar
+  const body = document.getElementById('modal-body');
+
+  if(!modalEdicao){
+    backdrop.style.display = 'none';
+    return;
+  }
+
+  backdrop.style.display = 'flex';
+
+  if(modalEdicao === 'condominio'){
+    body.innerHTML = `
+      <h2>Editar Condomínio</h2>
+      <div class="modal-input-group">
+        <label>Nome</label>
+        <input type="text" id="modal-condo-nome" value="${escapeHtml(config.nomeCondominio)}" placeholder="Nome do condomínio">
+      </div>
+      <div class="modal-input-group">
+        <label>E-mail</label>
+        <input type="email" id="modal-condo-email" value="${escapeHtml(config.emailEndereco)}" placeholder="email@condominio.com">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="atualizarModalCondominio()">Salvar</button>
+      </div>
+    `;
+    document.getElementById('modal-condo-nome').focus();
+  } else if(modalEdicao === 'morador'){
+    body.innerHTML = `
+      <h2>Editar Morador</h2>
+      <div class="modal-input-group">
+        <label>Nome</label>
+        <input type="text" id="modal-res-nome" value="${escapeHtml(residenteEdicao.nome)}" placeholder="Nome">
+      </div>
+      <div class="modal-input-group">
+        <label>Unidade</label>
+        <input type="text" id="modal-res-unidade" value="${escapeHtml(residenteEdicao.unidade)}" placeholder="Bloco/apto">
+      </div>
+      <div class="modal-input-group">
+        <label>WhatsApp</label>
+        <input type="tel" id="modal-res-whatsapp" value="${escapeHtml(residenteEdicao.whatsapp)}" placeholder="(11) 90000-0000">
+      </div>
+      <div class="modal-input-group">
+        <label>E-mail</label>
+        <input type="email" id="modal-res-email" value="${escapeHtml(residenteEdicao.email)}" placeholder="email@exemplo.com">
+      </div>
+      <div class="modal-input-group">
+        <label>Código de acesso</label>
+        <input type="text" id="modal-res-codigo" value="${escapeHtml(residenteEdicao.codigo)}" placeholder="Ex: 302B">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="atualizarModalMorador()">Salvar</button>
+      </div>
+    `;
+    document.getElementById('modal-res-nome').focus();
+  } else if(modalEdicao === 'alterar-senha'){
+    body.innerHTML = `
+      <h2>Alterar código de acesso</h2>
+      <div class="modal-input-group">
+        <label>Novo código</label>
+        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" oninput="novaSenh=this.value">
+      </div>
+      <div class="modal-input-group">
+        <label>Confirmar código</label>
+        <input type="password" id="modal-confirmar-senha" placeholder="Repita o código" oninput="confirmarSenha=this.value">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="executarAlterarSenha()">Alterar</button>
+      </div>
+    `;
+    document.getElementById('modal-nova-senha').focus();
+  } else if(modalEdicao === 'reset-senha'){
+    body.innerHTML = `
+      <h2>Reset de Senha</h2>
+      <p>A senha do síndico será resetada para: <strong>1234</strong></p>
+      <p>Tem certeza que deseja continuar?</p>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primary" onclick="executarResetSenha()">Resetar Senha</button>
+      </div>
+    `;
+  }
+}
+
+function atualizarModalCondominio(){
+  config.nomeCondominio = document.getElementById('modal-condo-nome').value || config.nomeCondominio;
+  config.emailEndereco = document.getElementById('modal-condo-email').value || config.emailEndereco;
+  salvarEdicaoCondominio();
+}
+
+function atualizarModalMorador(){
+  residenteEdicao.nome = document.getElementById('modal-res-nome').value || residenteEdicao.nome;
+  residenteEdicao.unidade = document.getElementById('modal-res-unidade').value || residenteEdicao.unidade;
+  residenteEdicao.whatsapp = document.getElementById('modal-res-whatsapp').value || residenteEdicao.whatsapp;
+  residenteEdicao.email = document.getElementById('modal-res-email').value || residenteEdicao.email;
+  residenteEdicao.codigo = document.getElementById('modal-res-codigo').value || residenteEdicao.codigo;
+  salvarEdicaoMorador();
+}
+
+// renderizar modal quando abrirmos algum
+function mostrarModal(){
+  try { renderModal(); }catch(e){ console.error(e); }
+}
+
+// Rede de segurança: fecha o modal ao clicar fora dele ou apertar Esc.
+// Isso é o que garante que ninguém fique preso numa tela travada pelo celular,
+// onde não existe console do navegador para destravar.
+document.addEventListener('click', function(e){
+  const backdrop = document.getElementById('modal-backdrop');
+  if(backdrop && e.target === backdrop) fecharModal();
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') fecharModal();
+});
+</script>
+<div id="modal-backdrop" style="display:none">
+  <div class="modal-content" id="modal-body"></div>
+</div>
 </body>
 </html>
