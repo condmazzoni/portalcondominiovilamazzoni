@@ -1014,13 +1014,20 @@ function renderMorador(){
   if(config.mural && config.mural.length > 0){
     const muralCard = document.createElement('div');
     muralCard.className='card';
-    muralCard.style.background='var(--sky-bg)';
-    muralCard.style.borderLeft='4px solid var(--primary)';
-    muralCard.innerHTML = '<h3 style="margin-top:0;color:var(--ink)">📢 Avisos importantes</h3>';
+    muralCard.style.background='linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%)';
+    muralCard.style.borderLeft='6px solid #D84315';
+    muralCard.style.borderRadius='12px';
+    muralCard.style.padding='24px';
+    muralCard.style.boxShadow='0 6px 20px rgba(255, 107, 53, 0.3)';
+    muralCard.style.marginBottom='24px';
+    muralCard.innerHTML = '<h3 style="margin-top:0;color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.5px">📢 AVISOS IMPORTANTES</h3>';
     config.mural.forEach(item=>{
       const p = document.createElement('p');
-      p.style.margin='8px 0';
-      p.style.fontSize='13.5px';
+      p.style.margin='12px 0';
+      p.style.fontSize='15px';
+      p.style.fontWeight='bold';
+      p.style.color='#fff';
+      p.style.lineHeight='1.6';
       p.textContent = item.texto;
       muralCard.appendChild(p);
     });
