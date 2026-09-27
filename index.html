@@ -151,132 +151,25 @@
   .grid-two{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
   @media(max-width:800px){.grid-two{grid-template-columns:1fr;}}
   /* modais de edição */
-  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  #modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
   .modal-content { background: white; border-radius: 8px; padding: 30px; max-width: 500px; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .modal-content h2 { margin-top: 0; margin-bottom: 20px; font-size: 20px; }
   .modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
   .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px; }
   .modal-buttons button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-  .modal-buttons .btn-primary { background: var(--ink); color: white; }
+  .modal-buttons .btn-primary { background: var(--primary); color: white; }
   .modal-buttons .btn-secondary { background: #ccc; color: #333; }
   .modal-input-group { margin-bottom: 20px; }
   .modal-input-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 5px; }
   .modal-input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-
-  /* PWA Install Prompt */
-  .pwa-install-prompt {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
-    color: white;
-    padding: 16px 20px;
-    gap: 12px;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 14px;
-    z-index: 10000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  }
-  .pwa-install-prompt.show {
-    display: flex;
-  }
-  .pwa-install-prompt.show ~ .app {
-    padding-top: 60px;
-  }
-  .pwa-install-prompt .pwa-text {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
-  }
-  .pwa-install-prompt .pwa-title {
-    font-weight: 600;
-    font-size: 15px;
-  }
-  .pwa-install-prompt .pwa-desc {
-    font-size: 13px;
-    opacity: 0.95;
-  }
-  .pwa-install-prompt button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .pwa-install-prompt .install-btn {
-    background: white;
-    color: #0066cc;
-  }
-  .pwa-install-prompt .close-btn {
-    background: transparent;
-    color: white;
-    opacity: 0.8;
-  }
 </style>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0066cc">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Portal Cond.">
-<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDE4MCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiByeD0iNDUiIGZpbGw9IiMwMDY2Y2MiLz4KPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iODYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkM8L3RleHQ+Cjwvc3ZnPg==">
 </head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
 <body>
-<div class="pwa-install-prompt" id="pwaPrompt">
-  <div class="pwa-text">
-    <div class="pwa-title">Instale o app</div>
-    <div class="pwa-desc">Acesse mais rápido, direto da tela inicial do celular.</div>
-  </div>
-  <button class="install-btn" id="pwaInstallBtn">Instalar</button>
-  <button class="close-btn" id="pwaCloseBtn">✕</button>
-</div>
 <div class="app" id="app"></div>
 
 <script>
-/* ---------- PWA - Instalação e Service Worker ---------- */
-let deferredPrompt = null;
-
-// Registrar service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then(registration => {
-      console.log('Service Worker registrado:', registration);
-    }).catch(err => {
-      console.log('Erro ao registrar Service Worker:', err);
-    });
-  });
-}
-
-// Configurar o prompt de instalação do PWA
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById('pwaPrompt').classList.add('show');
-});
-
-window.addEventListener('appinstalled', () => {
-  console.log('App instalado com sucesso!');
-  deferredPrompt = null;
-  document.getElementById('pwaPrompt').classList.remove('show');
-});
-
-document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to the install prompt: ${outcome}`);
-    deferredPrompt = null;
-  }
-});
-
-document.getElementById('pwaCloseBtn')?.addEventListener('click', () => {
-  document.getElementById('pwaPrompt').classList.remove('show');
-});
-
 /* ---------- conexão com o servidor real (substitui a memória do Claude) ----------
    Se BACKEND_URL_PADRAO e BACKEND_API_KEY_PADRAO estiverem preenchidos
    abaixo, TODO MUNDO que abrir este arquivo usa essa conexão automaticamente
@@ -374,7 +267,7 @@ let senhaAtual = '';
 let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
 
 function defaultConfig(){
-  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false };
+  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null, normasLocacao:'', salaoPreco:'', salaoRegras:'', mural: [], salaoBookings: [] };
 }
 let config = defaultConfig();
 
@@ -449,10 +342,10 @@ function resetSessionState(){
   view='morador'; sindicoAuth=false; sindicoTab='inbox'; filtroInbox='todas'; mensagemAberta=null;
   moradorAuth=null; gateUnidade=''; gateCodigo=''; moradorTab='mensagem'; pinValue='';
   formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
-  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+  visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', dataSaida:'', enviando:false, enviado:false };
   visitanteFiltro='todos';
   broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
-  novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+  novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'', observacao:'' };
 }
 
 /* ---- funções de edição ---- */
@@ -513,13 +406,13 @@ async function executarAlterarSenha(){
   if(!novaSenh.trim()){ showToast('Defina uma nova senha.'); return; }
   if(novaSenh !== confirmarSenha){ showToast('As senhas não conferem.'); return; }
   if(novaSenh.length < 4){ showToast('A senha deve ter pelo menos 4 caracteres.'); return; }
-  // o acesso do morador é unidade + código, então é o código que muda aqui
-  const morador = moradorAuth ? residents.find(r => normaliza(r.unidade) === normaliza(moradorAuth.unidade)) : null;
-  if(!morador){ showToast('Não consegui identificar sua unidade. Entre novamente.'); return; }
-  morador.codigo = novaSenh.trim();
+  const morador = residents.find(r=>r.id === moradorAuth);
+  if(!morador)return;
+  morador.senha = novaSenh;
+  residents = residents.map(r=>r.id===morador.id ? morador : r);
   await saveResidents();
   fecharModal();
-  showToast('Código de acesso alterado com sucesso!');
+  showToast('Senha alterada com sucesso!');
 }
 async function executarResetSenha(){
   const novo = '1234';
@@ -527,6 +420,101 @@ async function executarResetSenha(){
   await saveMasterConfig();
   fecharModal();
   showToast('Senha do síndico resetada para: '+novo);
+}
+
+/* ---- exportação de dados ---- */
+function exportarMensagensExcel(){
+  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
+  const dados = messages.map(m=>({
+    'Data/Hora': new Date(m.criadoEm).toLocaleString('pt-BR'),
+    'Morador': m.moradorNome || '—',
+    'Tipo': m.tipo || '—',
+    'Assunto': m.assunto || m.titulo || '—',
+    'Mensagem': m.mensagem || '—',
+    'Status': m.resolvida ? 'Resolvida' : 'Pendente'
+  }));
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mensagens');
+  XLSX.writeFile(wb, `mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Mensagens exportadas!');
+}
+
+function exportarVisitantesExcel(){
+  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
+  const dados = visitors.map(v=>({
+    'Data': new Date(v.criadoEm).toLocaleDateString('pt-BR'),
+    'Hora entrada': v.entrada || '—',
+    'Hora saída': v.saida || '—',
+    'Morador': v.moradorNome || '—',
+    'Unidade': v.unidade || '—',
+    'Nome do visitante': v.nomeVisitante || '—',
+    'CPF': v.cpf || '—',
+    'RG': v.rg || '—',
+    'Grau': v.grau || '—'
+  }));
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Visitantes');
+  XLSX.writeFile(wb, `visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Visitantes exportados!');
+}
+
+function exportarMensagensPDF(){
+  if(messages.length === 0){ showToast('Nenhuma mensagem para exportar.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Relatório de Mensagens', 10, 10);
+  doc.setFontSize(10);
+  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
+  
+  let y = 35;
+  messages.forEach((m, i)=>{
+    if(y > 250){ doc.addPage(); y = 10; }
+    doc.setFontSize(9);
+    doc.text(`${i+1}. ${m.moradorNome || 'Anônimo'} - ${new Date(m.criadoEm).toLocaleString('pt-BR')}`, 10, y);
+    y += 5;
+    doc.setFontSize(8);
+    const linhas = doc.splitTextToSize(m.mensagem || '', 190);
+    linhas.forEach(linha=>{ 
+      if(y > 250){ doc.addPage(); y = 10; }
+      doc.text(linha, 10, y); 
+      y += 4;
+    });
+    y += 3;
+  });
+  
+  doc.save(`mensagens-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('Mensagens exportadas em PDF!');
+}
+
+function exportarVisitantesPDF(){
+  if(visitors.length === 0){ showToast('Nenhum visitante para exportar.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Relatório de Visitantes', 10, 10);
+  doc.setFontSize(10);
+  doc.text(`Condomínio: ${config.nomeCondominio}`, 10, 20);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 26);
+  
+  let y = 35;
+  visitors.forEach((v, i)=>{
+    if(y > 240){ doc.addPage(); y = 10; }
+    doc.setFontSize(9);
+    doc.text(`${i+1}. ${v.nomeVisitante} - Apt ${v.unidade} (${new Date(v.criadoEm).toLocaleDateString('pt-BR')})`, 10, y);
+    y += 5;
+    doc.setFontSize(8);
+    doc.text(`CPF: ${v.cpf || '—'} | RG: ${v.rg || '—'} | Grau: ${v.grau || '—'}`, 10, y);
+    y += 4;
+    doc.text(`Entrada: ${v.entrada || '—'} | Saída: ${v.saida || '—'}`, 10, y);
+    y += 6;
+  });
+  
+  doc.save(`visitantes-${condoAtual}-${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('Visitantes exportados em PDF!');
 }
 
 async function initApp(){
@@ -619,6 +607,41 @@ async function loadCondoData(condoId){
 
 async function saveConfig(){
   await storageSet('config:'+condoAtual, JSON.stringify(config));
+}
+async function uploadRegimento(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e)=>{
+    config.regimento = {
+      nome: file.name,
+      tipo: file.type,
+      tamanho: file.size,
+      data: e.target.result // base64
+    };
+    await saveConfig();
+    showToast('Regimento enviado com sucesso!');
+    render();
+  };
+  reader.onerror = ()=> showToast('Erro ao ler o arquivo.');
+  reader.readAsDataURL(file);
+}
+function downloadRegimento(){
+  if(!config.regimento){
+    showToast('Nenhum regimento anexado.');
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = config.regimento.data;
+  link.download = config.regimento.nome;
+  link.click();
+}
+async function removerRegimento(){
+  if(confirm('Tem certeza que deseja remover o regimento?')){
+    config.regimento = null;
+    await saveConfig();
+    showToast('Regimento removido.');
+    render();
+  }
 }
 async function saveResidents(){
   await storageSet('residents:'+condoAtual, JSON.stringify(residents));
@@ -987,9 +1010,26 @@ function renderMorador(){
   info.appendChild(left); info.appendChild(sair);
   outer.appendChild(info);
 
+  // Mural (bulletin board)
+  if(config.mural && config.mural.length > 0){
+    const muralCard = document.createElement('div');
+    muralCard.className='card';
+    muralCard.style.background='var(--sky-bg)';
+    muralCard.style.borderLeft='4px solid var(--primary)';
+    muralCard.innerHTML = '<h3 style="margin-top:0;color:var(--ink)">📢 Avisos importantes</h3>';
+    config.mural.forEach(item=>{
+      const p = document.createElement('p');
+      p.style.margin='8px 0';
+      p.style.fontSize='13.5px';
+      p.textContent = item.texto;
+      muralCard.appendChild(p);
+    });
+    outer.appendChild(muralCard);
+  }
+
   const subtabs = document.createElement('div');
   subtabs.className='subtabs';
-  [['mensagem','Enviar mensagem'],['visitante','Cadastrar visitante']].forEach(([k,l])=>{
+  [['mensagem','Enviar mensagem'],['visitante','Cadastrar visitante'],['salao','Salão de festas']].forEach(([k,l])=>{
     const b = document.createElement('button');
     b.textContent = l;
     b.className = moradorTab===k ? 'active' : '';
@@ -997,7 +1037,9 @@ function renderMorador(){
     subtabs.appendChild(b);
   });
   outer.appendChild(subtabs);
-  outer.appendChild(moradorTab==='mensagem' ? renderMensagemForm() : renderVisitanteForm());
+  if(moradorTab==='mensagem') outer.appendChild(renderMensagemForm());
+  else if(moradorTab==='visitante') outer.appendChild(renderVisitanteForm());
+  else if(moradorTab==='salao') outer.appendChild(renderSalaoMorador());
   return outer;
 }
 
@@ -1157,10 +1199,9 @@ function renderMensagemForm(){
       messages.unshift(msg);
       formState.enviado = true;
       if(backendConfig){
-        // manda foto E vídeo juntos (antes só ia um dos dois) e avisa se o e-mail falhar
-        const anexos = [];
-        if(msg.imagemData) anexos.push({ dataUrl: msg.imagemData, nome: formState.imagemNome || 'foto.jpg' });
-        if(msg.videoData) anexos.push({ dataUrl: msg.videoData, nome: formState.videoNome || 'video.mp4' });
+        let anexo = null;
+        if(msg.imagemData) anexo = { dataUrl: msg.imagemData, nome: 'foto.jpg' };
+        else if(msg.videoData) anexo = { dataUrl: msg.videoData, nome: 'video.mp4' };
         chamarBackend('/api/notificar-sindico', {
           canalWhatsapp: config.whatsappAtivo,
           canalEmail: config.emailAtivo,
@@ -1168,11 +1209,7 @@ function renderMensagemForm(){
           emailPara: config.emailEndereco,
           assunto: 'Nova ' + labelTipo(msg.tipo).toLowerCase() + ' — ' + msg.unidade,
           mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto,
-          anexos
-        }).then(r=>{
-          if(r && r.email && r.email.enviado === false){
-            showToast('Mensagem registrada, mas o e-mail falhou: ' + r.email.erro);
-          }
+          anexo
         });
       }
     }catch(e){
@@ -1187,7 +1224,7 @@ function renderMensagemForm(){
   return wrap;
 }
 
-let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', enviando:false, enviado:false };
+let visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', dataSaida:'', enviando:false, enviado:false };
 
 function renderVisitanteForm(){
   const wrap = document.createElement('div');
@@ -1305,6 +1342,17 @@ function renderVisitanteForm(){
   row4.appendChild(entradaField); row4.appendChild(saidaField);
   card.appendChild(row4);
 
+  const row5 = document.createElement('div');
+  row5.className='row2';
+  const dataSaidaField = field('Data de saída (se diferente)', null);
+  const dataSaidaInput = document.createElement('input');
+  dataSaidaInput.type='text'; dataSaidaInput.inputMode='numeric'; dataSaidaInput.placeholder='dd/mm/aaaa (opcional)';
+  dataSaidaInput.value = visitorFormState.dataSaida || '';
+  dataSaidaInput.oninput = e=>{ const m = maskData(e.target.value); e.target.value=m; visitorFormState.dataSaida = m; };
+  dataSaidaField.appendChild(dataSaidaInput);
+  row5.appendChild(dataSaidaField);
+  card.appendChild(row5);
+
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
   btn.textContent = visitorFormState.enviando ? 'Enviando...' : 'Cadastrar';
@@ -1336,6 +1384,7 @@ function renderVisitanteForm(){
       data: visitorFormState.data.trim(),
       entrada: visitorFormState.entrada.trim(),
       saida: visitorFormState.saida.trim(),
+      dataSaida: visitorFormState.dataSaida.trim(),
       criadoEm: Date.now(),
       status: 'pendente'
     };
@@ -1420,7 +1469,7 @@ function renderSindico(){
   const wrap = document.createElement('div');
   const tabs = document.createElement('div');
   tabs.className='tabbar';
-  [['inbox','Mensagens'],['visitantes','Visitantes'],['enviar','Enviar mensagem'],['moradores','Moradores'],['config','Configurações']].forEach(([k,l])=>{
+  [['inbox','Mensagens'],['visitantes','Visitantes'],['enviar','Enviar mensagem'],['moradores','Moradores'],['salao','Salão de festas'],['config','Configurações']].forEach(([k,l])=>{
     const b = document.createElement('button');
     b.textContent = l + (k==='inbox' ? countBadge() : k==='visitantes' ? countBadgeVisitantes() : '');
     b.className = sindicoTab===k ? 'active' : '';
@@ -1433,6 +1482,7 @@ function renderSindico(){
   else if(sindicoTab==='visitantes') wrap.appendChild(renderVisitantes());
   else if(sindicoTab==='enviar') wrap.appendChild(renderEnviar());
   else if(sindicoTab==='moradores') wrap.appendChild(renderMoradores());
+  else if(sindicoTab==='salao') wrap.appendChild(renderSalaoSindico());
   else wrap.appendChild(renderConfig());
 
   return wrap;
@@ -1465,6 +1515,18 @@ function renderInbox(){
     toolbar.appendChild(b);
   });
   card.appendChild(toolbar);
+
+  // Botões de exportação
+  const exportDiv = document.createElement('div');
+  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
+  const expExcelBtn = document.createElement('button');
+  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
+  expExcelBtn.onclick = ()=> exportarMensagensExcel();
+  const expPdfBtn = document.createElement('button');
+  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
+  expPdfBtn.onclick = ()=> exportarMensagensPDF();
+  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
+  card.appendChild(exportDiv);
 
   let list = messages;
   if(filtroInbox==='naoLidas') list = list.filter(m=>!m.lida);
@@ -1568,6 +1630,18 @@ function renderVisitantes(){
   });
   card.appendChild(toolbar);
 
+  // Botões de exportação
+  const exportDiv = document.createElement('div');
+  exportDiv.style.display='flex'; exportDiv.style.gap='6px'; exportDiv.style.marginBottom='12px'; exportDiv.style.flexWrap='wrap';
+  const expExcelBtn = document.createElement('button');
+  expExcelBtn.className='btn btn-ghost'; expExcelBtn.style.fontSize='12px'; expExcelBtn.textContent='📊 Excel';
+  expExcelBtn.onclick = ()=> exportarVisitantesExcel();
+  const expPdfBtn = document.createElement('button');
+  expPdfBtn.className='btn btn-ghost'; expPdfBtn.style.fontSize='12px'; expPdfBtn.textContent='📄 PDF';
+  expPdfBtn.onclick = ()=> exportarVisitantesPDF();
+  exportDiv.appendChild(expExcelBtn); exportDiv.appendChild(expPdfBtn);
+  card.appendChild(exportDiv);
+
   let list = visitors;
   if(visitanteFiltro!=='todos') list = list.filter(v=>v.status===visitanteFiltro);
 
@@ -1610,18 +1684,8 @@ function labelGrau(g){
 /* ---- enviar mensagem (broadcast) ---- */
 let broadcastSelecionados = new Set();
 let broadcastTexto = '';
-let broadcastAssunto = '';
 let broadcastCanalWA = true;
 let broadcastCanalEmail = true;
-let broadcastAnexos = []; // array de {nome, dataUrl, tamanhoMB}
-let broadcastMostrarLinks = false; // para mostrar/esconder os links de WhatsApp
-
-// Gera um link do WhatsApp com a mensagem pré-preenchida
-function gerarLinkWhatsApp(numero, mensagem){
-  const numeroNormalizado = normalizarNumeroBR(numero);
-  const mensagemCodificada = encodeURIComponent(mensagem);
-  return `https://wa.me/${numeroNormalizado.replace(/\D/g, '')}?text=${mensagemCodificada}`;
-}
 
 function renderEnviar(){
   const wrap = document.createElement('div');
@@ -1632,7 +1696,7 @@ function renderEnviar(){
   const warn = document.createElement('div');
   warn.className='warn';
   warn.textContent = backendConfig
-    ? 'O envio por e-mail está conectado e funcionando. O envio por WhatsApp está em construção — será liberado quando o condomínio autorizar a contratação do WhatsApp Business.'
+    ? 'O envio real por WhatsApp e e-mail está conectado. Alguns destinatários podem não receber se o número/e-mail cadastrado estiver errado, ou se o WhatsApp ainda estiver no Sandbox de testes.'
     : 'O envio real por WhatsApp e e-mail ainda não está conectado (ver Configurações → Conexão com o servidor de envio). Por enquanto, a mensagem só fica registrada aqui.';
   card.appendChild(warn);
 
@@ -1684,157 +1748,11 @@ function renderEnviar(){
   msgField.appendChild(ta);
   card.appendChild(msgField);
 
-  const assuntoField = field('Assunto (opcional)', null);
-  const assuntoInput = document.createElement('input');
-  assuntoInput.type='text'; assuntoInput.value=broadcastAssunto;
-  assuntoInput.placeholder='Ex: Comunicado importante, Aviso de manutenção...';
-  assuntoInput.oninput = e=> broadcastAssunto = e.target.value;
-  assuntoField.appendChild(assuntoInput);
-  card.appendChild(assuntoField);
-
   const channels = document.createElement('div');
   channels.style.display='flex'; channels.style.gap='18px'; channels.style.margin='4px 0 18px';
   channels.appendChild(checkboxLabel('WhatsApp', broadcastCanalWA, v=>broadcastCanalWA=v));
   channels.appendChild(checkboxLabel('E-mail', broadcastCanalEmail, v=>broadcastCanalEmail=v));
   card.appendChild(channels);
-
-  // Seção de links de WhatsApp
-  if(broadcastSelecionados.size > 0 && broadcastTexto.trim()){
-    const linksSection = document.createElement('div');
-    linksSection.style.margin='18px 0'; linksSection.style.padding='12px';
-    linksSection.style.background='#f9f9f9'; linksSection.style.border='1px solid #ddd';
-    linksSection.style.borderRadius='4px';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type='button'; toggleBtn.style.marginBottom='12px'; toggleBtn.className='btn btn-ghost';
-    toggleBtn.textContent = (broadcastMostrarLinks ? '▼' : '▶') + ' Links de WhatsApp para compartilhar';
-    toggleBtn.onclick = ()=>{ broadcastMostrarLinks = !broadcastMostrarLinks; render(); };
-    linksSection.appendChild(toggleBtn);
-
-    if(broadcastMostrarLinks){
-      const info = document.createElement('div');
-      info.style.fontSize='12px'; info.style.marginBottom='12px'; info.style.color='#666';
-      info.textContent = 'Clique em um link para abrir o WhatsApp com a mensagem pré-preenchida. Você também pode copiar o link para compartilhar.';
-      linksSection.appendChild(info);
-
-      const linksList = document.createElement('div');
-      linksList.style.maxHeight='300px'; linksList.style.overflowY='auto';
-
-      [...broadcastSelecionados].forEach(residentId=>{
-        const resident = residents.find(r=>r.id===residentId);
-        if(!resident || !resident.whatsapp) return;
-
-        const linkItem = document.createElement('div');
-        linkItem.style.display='flex'; linkItem.style.justifyContent='space-between';
-        linkItem.style.alignItems='center'; linkItem.style.padding='10px';
-        linkItem.style.marginBottom='8px'; linkItem.style.background='white';
-        linkItem.style.borderRadius='4px'; linkItem.style.border='1px solid #e0e0e0';
-
-        const info = document.createElement('div');
-        info.style.flex='1';
-        const nome = document.createElement('div');
-        nome.style.fontWeight='600'; nome.style.fontSize='14px';
-        nome.textContent = escapeHtml(resident.nome);
-        const unidade = document.createElement('div');
-        unidade.style.fontSize='12px'; unidade.style.color='#666';
-        unidade.textContent = escapeHtml(resident.unidade);
-        info.appendChild(nome);
-        info.appendChild(unidade);
-        linkItem.appendChild(info);
-
-        const btnGroup = document.createElement('div');
-        btnGroup.style.display='flex'; btnGroup.style.gap='6px';
-
-        const linkBtn = document.createElement('button');
-        linkBtn.type='button'; linkBtn.className='btn btn-ghost'; linkBtn.textContent='Abrir WhatsApp';
-        linkBtn.style.fontSize='12px'; linkBtn.style.padding='6px 12px';
-        linkBtn.onclick = ()=>{
-          const link = gerarLinkWhatsApp(resident.whatsapp, broadcastTexto);
-          window.open(link, '_blank');
-        };
-
-        const copyBtn = document.createElement('button');
-        copyBtn.type='button'; copyBtn.className='btn btn-ghost'; copyBtn.textContent='Copiar link';
-        copyBtn.style.fontSize='12px'; copyBtn.style.padding='6px 12px';
-        copyBtn.onclick = ()=>{
-          const link = gerarLinkWhatsApp(resident.whatsapp, broadcastTexto);
-          navigator.clipboard.writeText(link);
-          showToast('Link copiado para a área de transferência!');
-        };
-
-        btnGroup.appendChild(linkBtn);
-        btnGroup.appendChild(copyBtn);
-        linkItem.appendChild(btnGroup);
-        linksList.appendChild(linkItem);
-      });
-
-      if(linksList.children.length === 0){
-        const empty = document.createElement('div');
-        empty.style.padding='12px'; empty.style.color='#999'; empty.style.textAlign='center';
-        empty.textContent = 'Nenhum morador selecionado com WhatsApp.';
-        linksSection.appendChild(empty);
-      } else {
-        linksSection.appendChild(linksList);
-      }
-    }
-    card.appendChild(linksSection);
-  }
-
-  /* ---- Seção de anexos ---- */
-  const anexosField = field('Anexos (documentos, imagens, PDFs) — opcional', null);
-  const anexosBox = document.createElement('div');
-  anexosBox.style.marginTop='8px';
-
-  // Lista de anexos selecionados
-  if(broadcastAnexos.length > 0){
-    const lista = document.createElement('div');
-    lista.style.marginBottom='12px';
-    broadcastAnexos.forEach((anexo, idx)=>{
-      const item = document.createElement('div');
-      item.style.display='flex'; item.style.justifyContent='space-between'; item.style.alignItems='center';
-      item.style.padding='8px'; item.style.background='#f0f8f0'; item.style.borderRadius='4px';
-      item.style.marginBottom='6px'; item.style.fontSize='13px';
-      const info = document.createElement('span');
-      info.textContent = anexo.nome + ' (' + anexo.tamanhoMB.toFixed(1) + 'MB)';
-      const btnRemove = document.createElement('button');
-      btnRemove.type='button'; btnRemove.textContent='✕'; btnRemove.style.border='none';
-      btnRemove.style.background='none'; btnRemove.style.cursor='pointer'; btnRemove.style.fontSize='14px';
-      btnRemove.onclick = ()=>{ broadcastAnexos.splice(idx,1); render(); };
-      item.appendChild(info);
-      item.appendChild(btnRemove);
-      lista.appendChild(item);
-    });
-    anexosBox.appendChild(lista);
-  }
-
-  // Input de arquivo
-  const anexoInput = document.createElement('input');
-  anexoInput.type='file'; anexoInput.multiple=true; anexoInput.accept='*/*';
-  anexoInput.style.display='block'; anexoInput.style.marginTop='8px';
-  anexoInput.onchange = async e=>{
-    const files = Array.from(e.target.files || []);
-    for(const f of files){
-      if(broadcastAnexos.length >= 3){
-        showToast('Máximo 3 anexos permitidos.');
-        break;
-      }
-      if(f.size > 5*1024*1024){
-        showToast('Arquivo "'+f.name+'" é muito grande (máx. 5MB).');
-        continue;
-      }
-      const dataUrl = await fileToBase64(f);
-      broadcastAnexos.push({
-        nome: f.name,
-        dataUrl: dataUrl,
-        tamanhoMB: f.size / (1024*1024)
-      });
-    }
-    e.target.value='';
-    render();
-  };
-  anexosBox.appendChild(anexoInput);
-  anexosField.appendChild(anexosBox);
-  card.appendChild(anexosField);
 
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
@@ -1845,13 +1763,11 @@ function renderEnviar(){
     const bc = {
       id: uid(),
       texto: broadcastTexto.trim(),
-      assunto: broadcastAssunto.trim() || (config.nomeCondominio || 'Condomínio') + ' — comunicado',
       destinatarios: [...broadcastSelecionados],
       canalWhatsapp: broadcastCanalWA,
       canalEmail: broadcastCanalEmail,
       criadoEm: Date.now(),
-      status: 'pendente_integracao',
-      anexos: broadcastAnexos.length > 0 ? broadcastAnexos : null
+      status: 'pendente_integracao'
     };
     await storageSet('broadcasts:'+condoAtual+':'+bc.id, JSON.stringify(bc));
     const totalDestinatarios = bc.destinatarios.length;
@@ -1865,9 +1781,8 @@ function renderEnviar(){
         mensagem: bc.texto,
         canalWhatsapp: bc.canalWhatsapp,
         canalEmail: bc.canalEmail,
-        assunto: bc.assunto,
-        destinatarios: destinatariosInfo,
-        anexos: broadcastAnexos.length > 0 ? broadcastAnexos : undefined
+        assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
+        destinatarios: destinatariosInfo
       });
       btn.disabled = false;
       if(resultado && resultado.erro){
@@ -1875,18 +1790,17 @@ function renderEnviar(){
       } else if(resultado && resultado.resultados){
         const okWA = resultado.resultados.filter(r=>r.whatsapp && r.whatsapp.enviado).length;
         const okEmail = resultado.resultados.filter(r=>r.email && r.email.enviado).length;
-        const waEmConstrucao = resultado.resultados.some(r=>r.whatsapp && r.whatsapp.emConstrucao);
         const partes = [];
-        if(bc.canalWhatsapp) partes.push(waEmConstrucao ? 'WhatsApp: em construção' : 'WhatsApp: '+okWA+'/'+totalDestinatarios);
-        if(bc.canalEmail) partes.push('E-mail: '+okEmail+'/'+totalDestinatarios);
-        showToast(partes.join(' · '));
+        if(bc.canalWhatsapp) partes.push(okWA+'/'+totalDestinatarios+' por WhatsApp');
+        if(bc.canalEmail) partes.push(okEmail+'/'+totalDestinatarios+' por e-mail');
+        showToast('Enviado: ' + partes.join(' · ') + '.');
       } else {
         showToast('Mensagem registrada para '+totalDestinatarios+' morador(es).');
       }
     } else {
       showToast('Mensagem registrada para '+totalDestinatarios+' morador(es). Configure o backend em Configurações para o envio real.');
     }
-    broadcastTexto=''; broadcastAssunto=''; broadcastSelecionados=new Set(); broadcastAnexos=[]; broadcastMostrarLinks=false;
+    broadcastTexto=''; broadcastSelecionados=new Set();
     render();
   };
   card.appendChild(btn);
@@ -1905,7 +1819,7 @@ function checkboxLabel(text, checked, onChange){
 }
 
 /* ---- moradores ---- */
-let novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+let novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'', observacao:'' };
 function renderMoradores(){
   const wrap = document.createElement('div');
   const card = document.createElement('div');
@@ -1927,6 +1841,14 @@ function renderMoradores(){
   row4.appendChild(field('Código de acesso da unidade', textInput(novoResidente.codigo, v=>novoResidente.codigo=v, 'Ex: 302B')));
   card.appendChild(row4);
 
+  const obsField = field('Observações (opcional)', null);
+  const obsInput = document.createElement('textarea');
+  obsInput.style.width='100%'; obsInput.style.minHeight='60px'; obsInput.style.padding='8px'; obsInput.style.border='1px solid #ddd'; obsInput.style.borderRadius='4px'; obsInput.style.fontSize='14px';
+  obsInput.value = novoResidente.observacao;
+  obsInput.oninput = e => novoResidente.observacao = e.target.value;
+  obsField.appendChild(obsInput);
+  card.appendChild(obsField);
+
   const addBtn = document.createElement('button');
   addBtn.className='btn btn-primary';
   addBtn.textContent='Adicionar morador';
@@ -1935,7 +1857,7 @@ function renderMoradores(){
     if(!novoResidente.codigo.trim()){ showToast('Defina um código de acesso para esta unidade.'); return; }
     residents.push({ id: uid(), ...novoResidente });
     await saveResidents();
-    novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'' };
+    novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'', observacao:'' };
     render();
   };
   card.appendChild(addBtn);
@@ -1947,11 +1869,11 @@ function renderMoradores(){
     listCard.innerHTML = `<div class="empty">Nenhum morador cadastrado.</div>`;
   } else {
     const table = document.createElement('table');
-    table.innerHTML = `<thead><tr><th>Nome</th><th>Unidade</th><th>WhatsApp</th><th>E-mail</th><th>Código</th><th></th></tr></thead>`;
+    table.innerHTML = `<thead><tr><th>Nome</th><th>Unidade</th><th>WhatsApp</th><th>E-mail</th><th>Código</th><th>Obs.</th><th></th></tr></thead>`;
     const tbody = document.createElement('tbody');
     residents.forEach(r=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.unidade)}</td><td>${escapeHtml(r.whatsapp||'—')}</td><td>${escapeHtml(r.email||'—')}</td><td>${escapeHtml(r.codigo||'—')}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.unidade)}</td><td>${escapeHtml(r.whatsapp||'—')}</td><td>${escapeHtml(r.email||'—')}</td><td>${escapeHtml(r.codigo||'—')}</td><td style="font-size:12px;color:#666;max-width:150px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.observacao||'—')}</td>`;
       const td = document.createElement('td');
       const editBtn = document.createElement('button');
       editBtn.className='icon-btn'; editBtn.textContent='Editar';
@@ -1968,6 +1890,273 @@ function renderMoradores(){
     listCard.appendChild(table);
   }
   wrap.appendChild(listCard);
+
+  return wrap;
+}
+
+/* ---- salão de festas (morador) ---- */
+function renderSalaoMorador(){
+  const wrap = document.createElement('div');
+
+  // Info section
+  const infoCard = document.createElement('div');
+  infoCard.className='card';
+  infoCard.innerHTML = `<h2>🎉 Salão de festas</h2><p class="lead">Consulte as informações, regras e reserve o salão para seu evento.</p>`;
+
+  // Preço
+  if(config.salaoPreco){
+    const precoP = document.createElement('p');
+    precoP.style.fontSize='18px'; precoP.style.fontWeight='600'; precoP.style.color='var(--primary)'; precoP.style.margin='16px 0 8px';
+    precoP.textContent = 'Valor: ' + config.salaoPreco;
+    infoCard.appendChild(precoP);
+  }
+
+  // Normas
+  if(config.normasLocacao){
+    const normasTitle = document.createElement('h3');
+    normasTitle.style.marginTop='16px'; normasTitle.style.marginBottom='8px'; normasTitle.style.fontSize='15px'; normasTitle.style.fontWeight='600';
+    normasTitle.textContent = 'Normas de locação';
+    infoCard.appendChild(normasTitle);
+    const normasDiv = document.createElement('div');
+    normasDiv.style.background='#f5f5f5'; normasDiv.style.padding='12px'; normasDiv.style.borderRadius='4px'; normasDiv.style.whiteSpace='pre-wrap'; normasDiv.style.fontSize='13.5px'; normasDiv.style.lineHeight='1.6';
+    normasDiv.textContent = config.normasLocacao;
+    infoCard.appendChild(normasDiv);
+  }
+
+  // Regras
+  if(config.salaoRegras){
+    const regrasTitle = document.createElement('h3');
+    regrasTitle.style.marginTop='16px'; regrasTitle.style.marginBottom='8px'; regrasTitle.style.fontSize='15px'; regrasTitle.style.fontWeight='600';
+    regrasTitle.textContent = 'Regras do salão';
+    infoCard.appendChild(regrasTitle);
+    const regrasDiv = document.createElement('div');
+    regrasDiv.style.background='#f5f5f5'; regrasDiv.style.padding='12px'; regrasDiv.style.borderRadius='4px'; regrasDiv.style.whiteSpace='pre-wrap'; regrasDiv.style.fontSize='13.5px'; regrasDiv.style.lineHeight='1.6';
+    regrasDiv.textContent = config.salaoRegras;
+    infoCard.appendChild(regrasDiv);
+  }
+
+  wrap.appendChild(infoCard);
+
+  // Booking section
+  const bookCard = document.createElement('div');
+  bookCard.className='card';
+  bookCard.innerHTML = `<h2>Solicitar reserva</h2><p class="lead">Preencha os dados abaixo para solicitar uma reserva do salão.</p>`;
+
+  const dateField = field('Data desejada', null);
+  const dateInput = document.createElement('input');
+  dateInput.type='date';
+  dateInput.value = new Date().toISOString().split('T')[0];
+  dateField.appendChild(dateInput);
+  bookCard.appendChild(dateField);
+
+  const timeField = field('Horário de início (HH:MM)', null);
+  const timeInput = document.createElement('input');
+  timeInput.type='time';
+  timeField.appendChild(timeInput);
+  bookCard.appendChild(timeField);
+
+  const durationField = field('Duração (em horas)', null);
+  const durationSelect = document.createElement('select');
+  [1,2,3,4,5,6].forEach(h=>{
+    const opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = h + ' hora' + (h>1?'s':'');
+    durationSelect.appendChild(opt);
+  });
+  durationSelect.value = '2';
+  durationField.appendChild(durationSelect);
+  bookCard.appendChild(durationField);
+
+  const eventField = field('Tipo de evento', null);
+  const eventSelect = document.createElement('select');
+  ['Aniversário', 'Casamento', 'Batizado', 'Confraternização', 'Outro'].forEach(t=>{
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    eventSelect.appendChild(opt);
+  });
+  eventField.appendChild(eventSelect);
+  bookCard.appendChild(eventField);
+
+  const descField = field('Observações (opcional)', null);
+  const descTA = document.createElement('textarea');
+  descTA.placeholder = 'Descreva seu evento ou deixe mensagens especiais...';
+  descTA.style.minHeight = '80px';
+  descField.appendChild(descTA);
+  bookCard.appendChild(descField);
+
+  const bookBtn = document.createElement('button');
+  bookBtn.className='btn btn-primary';
+  bookBtn.textContent = 'Enviar solicitação';
+  bookBtn.onclick = async ()=>{
+    const date = dateInput.value;
+    const time = timeInput.value;
+    const duration = durationSelect.value;
+    const eventType = eventSelect.value;
+    const obs = descTA.value;
+
+    if(!date || !time){
+      showToast('Preencha data e horário.');
+      return;
+    }
+
+    if(!config.salaoBookings) config.salaoBookings = [];
+
+    const booking = {
+      id: uid(),
+      unidade: moradorAuth.unidade,
+      morador: moradorAuth.nomeSugerido,
+      data: date,
+      horario: time,
+      duracao: parseInt(duration),
+      tipoEvento: eventType,
+      observacoes: obs,
+      status: 'pendente',
+      criadoEm: Date.now()
+    };
+
+    config.salaoBookings.push(booking);
+    await saveConfig();
+    showToast('Solicitação enviada! O síndico analisará sua reserva.');
+    dateInput.value = new Date().toISOString().split('T')[0];
+    timeInput.value = '';
+    descTA.value = '';
+    render();
+  };
+  bookCard.appendChild(bookBtn);
+
+  wrap.appendChild(bookCard);
+  return wrap;
+}
+
+/* ---- salão de festas (síndico) ---- */
+function renderSalaoSindico(){
+  const wrap = document.createElement('div');
+
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Salão de festas - Solicitações</h2><p class="lead">Visualize, aprove ou rejeite as solicitações de reserva do salão pelos moradores.</p>`;
+
+  if(!config.salaoBookings || config.salaoBookings.length === 0){
+    card.innerHTML += '<div class="empty">Nenhuma solicitação de reserva.</div>';
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  const bookings = config.salaoBookings || [];
+
+  // Group by status
+  const pendentes = bookings.filter(b=>b.status==='pendente');
+  const aprovadas = bookings.filter(b=>b.status==='aprovada');
+  const rejeitadas = bookings.filter(b=>b.status==='rejeitada');
+
+  const renderBookingItem = (booking, canApprove) => {
+    const item = document.createElement('div');
+    item.style.padding='14px';
+    item.style.borderBottom='1px solid var(--line)';
+    item.style.display='flex';
+    item.style.gap='12px';
+    item.style.alignItems='center';
+    item.style.justifyContent='space-between';
+
+    const info = document.createElement('div');
+    info.style.flex='1';
+
+    const header = document.createElement('div');
+    header.style.fontWeight='600';
+    header.style.marginBottom='4px';
+    header.innerHTML = `<span>${escapeHtml(booking.morador)} (${escapeHtml(booking.unidade)})</span> - ${booking.tipoEvento}`;
+    info.appendChild(header);
+
+    const details = document.createElement('div');
+    details.style.fontSize='13px';
+    details.style.color='var(--muted)';
+    details.style.marginBottom='4px';
+    const dataFormatada = new Date(booking.data).toLocaleDateString('pt-BR');
+    details.textContent = `📅 ${dataFormatada} às ${booking.horario} (${booking.duracao}h)`;
+    info.appendChild(details);
+
+    if(booking.observacoes){
+      const obs = document.createElement('div');
+      obs.style.fontSize='12px';
+      obs.style.color='#666';
+      obs.style.marginTop='4px';
+      obs.style.fontStyle='italic';
+      obs.textContent = '📝 ' + booking.observacoes;
+      info.appendChild(obs);
+    }
+
+    item.appendChild(info);
+
+    if(canApprove){
+      const btns = document.createElement('div');
+      btns.style.display='flex';
+      btns.style.gap='6px';
+
+      const approveBtn = document.createElement('button');
+      approveBtn.className='btn btn-ghost';
+      approveBtn.style.color='var(--leaf)';
+      approveBtn.style.padding='6px 12px';
+      approveBtn.style.fontSize='12px';
+      approveBtn.textContent='✓ Aprovar';
+      approveBtn.onclick = async ()=>{
+        booking.status = 'aprovada';
+        await saveConfig();
+        showToast('Reserva aprovada!');
+        render();
+      };
+
+      const rejectBtn = document.createElement('button');
+      rejectBtn.className='btn btn-ghost';
+      rejectBtn.style.color='var(--brick)';
+      rejectBtn.style.padding='6px 12px';
+      rejectBtn.style.fontSize='12px';
+      rejectBtn.textContent='✕ Rejeitar';
+      rejectBtn.onclick = async ()=>{
+        booking.status = 'rejeitada';
+        await saveConfig();
+        showToast('Reserva rejeitada.');
+        render();
+      };
+
+      btns.appendChild(approveBtn);
+      btns.appendChild(rejectBtn);
+      item.appendChild(btns);
+    } else {
+      const status = document.createElement('div');
+      status.style.fontSize='12px';
+      status.style.fontWeight='600';
+      status.style.color = booking.status==='aprovada' ? 'var(--leaf)' : 'var(--brick)';
+      status.textContent = booking.status==='aprovada' ? '✓ Aprovada' : '✕ Rejeitada';
+      item.appendChild(status);
+    }
+
+    return item;
+  };
+
+  if(pendentes.length > 0){
+    const pendCard = document.createElement('div');
+    pendCard.className='card';
+    pendCard.innerHTML = `<h3 style="margin-top:0;color:var(--ink)">⏳ Pendentes (${pendentes.length})</h3>`;
+    pendentes.forEach(b=>pendCard.appendChild(renderBookingItem(b, true)));
+    wrap.appendChild(pendCard);
+  }
+
+  if(aprovadas.length > 0){
+    const aprovCard = document.createElement('div');
+    aprovCard.className='card';
+    aprovCard.innerHTML = `<h3 style="margin-top:0;color:var(--leaf)">✓ Aprovadas (${aprovadas.length})</h3>`;
+    aprovadas.forEach(b=>aprovCard.appendChild(renderBookingItem(b, false)));
+    wrap.appendChild(aprovCard);
+  }
+
+  if(rejeitadas.length > 0){
+    const rejCard = document.createElement('div');
+    rejCard.className='card';
+    rejCard.innerHTML = `<h3 style="margin-top:0;color:var(--brick)">✕ Rejeitadas (${rejeitadas.length})</h3>`;
+    rejeitadas.forEach(b=>rejCard.appendChild(renderBookingItem(b, false)));
+    wrap.appendChild(rejCard);
+  }
 
   return wrap;
 }
@@ -2036,7 +2225,7 @@ function renderConfig(){
   waCard.className='card';
   waCard.innerHTML = `<h2>WhatsApp</h2><p class="lead">Número usado para receber e enviar mensagens dos moradores.</p>`;
   const waWarn = document.createElement('div'); waWarn.className='warn';
-  waWarn.textContent = 'O envio por WhatsApp está em construção — depende da contratação de um número WhatsApp Business, que precisa de autorização do condomínio. O número abaixo já pode ficar cadastrado; ele será usado assim que o canal for liberado.';
+  waWarn.textContent = 'Este painel guarda apenas o número de exibição. O token de acesso da API do WhatsApp Business precisa ficar em um back-end seguro (nunca em uma página acessada pelos moradores) — veja a explicação no fim desta página.';
   waCard.appendChild(waWarn);
   const waField = field('Número do WhatsApp do condomínio', null);
   const waInput = document.createElement('input');
@@ -2079,6 +2268,137 @@ function renderConfig(){
   trocarBtn.onclick = ()=>{ esquecerConfigServidor(); };
   backendCard.appendChild(trocarBtn);
   wrap.appendChild(backendCard);
+
+  // Normas de locação
+  const normasCard = document.createElement('div');
+  normasCard.className='card';
+  normasCard.innerHTML = `<h2>Normas de locação</h2><p class="lead">Informe as regras e normas para aluguel do salão de festas. Essas informações serão exibidas para os moradores na aba "Salão de festas".</p>`;
+  const normasField = field('Normas de locação', null);
+  const normasTA = document.createElement('textarea');
+  normasTA.placeholder='Ex: - Não permitido uso de decoração permanente\n- Máximo 100 pessoas\n- Horário até 23h\n- Depósito caução: R$ 500';
+  normasTA.value = config.normasLocacao || '';
+  normasTA.style.minHeight='120px';
+  normasTA.oninput = e=> config.normasLocacao = e.target.value;
+  normasField.appendChild(normasTA);
+  normasCard.appendChild(normasField);
+  const normasSaveBtn = document.createElement('button');
+  normasSaveBtn.className='btn btn-ghost'; normasSaveBtn.textContent='Salvar normas';
+  normasSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Normas de locação atualizadas.'); };
+  normasCard.appendChild(normasSaveBtn);
+  wrap.appendChild(normasCard);
+
+  // Mural (Bulletin Board)
+  const muralCard = document.createElement('div');
+  muralCard.className='card';
+  muralCard.innerHTML = `<h2>Mural - Avisos importantes</h2><p class="lead">Adicione avisos que serão exibidos em destaque na página inicial dos moradores.</p>`;
+
+  if(!config.mural) config.mural = [];
+  config.mural.forEach((item, idx)=>{
+    const itemDiv = document.createElement('div');
+    itemDiv.style.marginBottom='12px';
+    itemDiv.style.padding='10px';
+    itemDiv.style.background='#f9f9f9';
+    itemDiv.style.borderRadius='4px';
+    itemDiv.style.display='flex';
+    itemDiv.style.gap='8px';
+    itemDiv.style.alignItems='center';
+    itemDiv.innerHTML = `<span style="flex:1;font-size:13.5px;">${escapeHtml(item.texto.substring(0,100))}${item.texto.length>100?'...':''}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.className='icon-btn'; delBtn.style.color='var(--brick)'; delBtn.textContent='Remover';
+    delBtn.onclick = async ()=>{ config.mural.splice(idx, 1); await saveConfig(); render(); };
+    itemDiv.appendChild(delBtn);
+    muralCard.appendChild(itemDiv);
+  });
+
+  const muralField = field('Novo aviso', null);
+  const muralInput = document.createElement('textarea');
+  muralInput.placeholder='Escreva o aviso que será exibido no mural...';
+  muralInput.style.minHeight='60px';
+  muralField.appendChild(muralInput);
+  muralCard.appendChild(muralField);
+
+  const muralBtn = document.createElement('button');
+  muralBtn.className='btn btn-primary'; muralBtn.textContent='Adicionar ao mural';
+  muralBtn.onclick = async ()=>{
+    const texto = muralInput.value.trim();
+    if(!texto){ showToast('Escreva um aviso.'); return; }
+    config.mural.push({ texto, criadoEm: Date.now() });
+    muralInput.value = '';
+    await saveConfig();
+    showToast('Aviso adicionado ao mural!');
+    render();
+  };
+  muralCard.appendChild(muralBtn);
+  wrap.appendChild(muralCard);
+
+  // Salão de festas
+  const salaoCard = document.createElement('div');
+  salaoCard.className='card';
+  salaoCard.innerHTML = `<h2>Salão de festas</h2><p class="lead">Configure o preço e as regras para aluguel do salão. Estas informações serão exibidas aos moradores.</p>`;
+
+  const precoField = field('Preço de aluguel (ex: R$ 500,00)', null);
+  const precoInput = document.createElement('input');
+  precoInput.type='text'; precoInput.placeholder='R$ '; precoInput.value=config.salaoPreco || '';
+  precoInput.oninput = e=> config.salaoPreco = e.target.value;
+  precoField.appendChild(precoInput);
+  salaoCard.appendChild(precoField);
+
+  const regrasField = field('Regras do salão (opcional)', null);
+  const regrasTA = document.createElement('textarea');
+  regrasTA.placeholder='Ex: - Limpeza obrigatória ao final\n- Proibido fumar\n- Máximo 4 horas de aluguel';
+  regrasTA.value = config.salaoRegras || '';
+  regrasTA.style.minHeight='100px';
+  regrasTA.oninput = e=> config.salaoRegras = e.target.value;
+  regrasField.appendChild(regrasTA);
+  salaoCard.appendChild(regrasField);
+
+  const salaoSaveBtn = document.createElement('button');
+  salaoSaveBtn.className='btn btn-ghost'; salaoSaveBtn.textContent='Salvar configurações do salão';
+  salaoSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Configurações do salão atualizadas.'); };
+  salaoCard.appendChild(salaoSaveBtn);
+  wrap.appendChild(salaoCard);
+
+  const regimentoCard = document.createElement('div');
+  regimentoCard.className='card';
+  regimentoCard.innerHTML = `<h2>Regimento do condomínio</h2><p class="lead">Anexe o regimento em PDF ou outro formato para referência ao analisar reclamações dos moradores.</p>`;
+  
+  if(config.regimento){
+    const regInfo = document.createElement('p');
+    regInfo.style.fontSize='14px'; regInfo.style.color='#666';
+    regInfo.textContent = `📄 Arquivo: ${config.regimento.nome} (${(config.regimento.tamanho/1024).toFixed(2)} KB)`;
+    regimentoCard.appendChild(regInfo);
+    
+    const btnDiv = document.createElement('div');
+    btnDiv.style.display='flex'; btnDiv.style.gap='8px'; btnDiv.style.flexWrap='wrap';
+    
+    const viewBtn = document.createElement('button');
+    viewBtn.className='btn btn-ghost'; viewBtn.textContent='Visualizar/Baixar';
+    viewBtn.onclick = ()=> downloadRegimento();
+    btnDiv.appendChild(viewBtn);
+    
+    const remBtn = document.createElement('button');
+    remBtn.className='btn btn-danger'; remBtn.textContent='Remover';
+    remBtn.onclick = ()=> removerRegimento();
+    btnDiv.appendChild(remBtn);
+    
+    regimentoCard.appendChild(btnDiv);
+  } else {
+    const p = document.createElement('p');
+    p.style.color='#999'; p.textContent='Nenhum arquivo enviado.';
+    regimentoCard.appendChild(p);
+  }
+  
+  const uploadLabel = document.createElement('label');
+  uploadLabel.style.display='block'; uploadLabel.style.marginTop='15px'; uploadLabel.style.cursor='pointer';
+  uploadLabel.innerHTML = `<button class="btn btn-primary" style="width:100%;">Escolher arquivo</button>`;
+  const fileInput = document.createElement('input');
+  fileInput.type='file'; fileInput.style.display='none';
+  fileInput.accept='.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png';
+  fileInput.onchange = (e)=>{ if(e.target.files[0]) uploadRegimento(e.target.files[0]); };
+  uploadLabel.appendChild(fileInput);
+  regimentoCard.appendChild(uploadLabel);
+  
+  wrap.appendChild(regimentoCard);
 
   return wrap;
 }
@@ -2144,15 +2464,15 @@ if(backendConfig && backendConfig.url && backendConfig.apiKey){
 function renderModal(){
   const backdrop = document.getElementById('modal-backdrop');
   if(!backdrop) return; // modal não existe na DOM, ignorar
-  const body = document.getElementById('modal-body');
-
+  
   if(!modalEdicao){
     backdrop.style.display = 'none';
     return;
   }
-
+  
+  const body = document.getElementById('modal-body');
   backdrop.style.display = 'flex';
-
+  
   if(modalEdicao === 'condominio'){
     body.innerHTML = `
       <h2>Editar Condomínio</h2>
@@ -2193,6 +2513,10 @@ function renderModal(){
         <label>Código de acesso</label>
         <input type="text" id="modal-res-codigo" value="${escapeHtml(residenteEdicao.codigo)}" placeholder="Ex: 302B">
       </div>
+      <div class="modal-input-group">
+        <label>Observações</label>
+        <textarea id="modal-res-obs" style="width:100%;min-height:60px;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:14px;">${escapeHtml(residenteEdicao.observacao||'')}</textarea>
+      </div>
       <div class="modal-buttons">
         <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
         <button class="btn-primary" onclick="atualizarModalMorador()">Salvar</button>
@@ -2201,14 +2525,14 @@ function renderModal(){
     document.getElementById('modal-res-nome').focus();
   } else if(modalEdicao === 'alterar-senha'){
     body.innerHTML = `
-      <h2>Alterar código de acesso</h2>
+      <h2>Alterar Senha</h2>
       <div class="modal-input-group">
-        <label>Novo código</label>
-        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" oninput="novaSenh=this.value">
+        <label>Nova Senha</label>
+        <input type="password" id="modal-nova-senha" placeholder="Mínimo 4 caracteres" onchange="novaSenh=this.value">
       </div>
       <div class="modal-input-group">
-        <label>Confirmar código</label>
-        <input type="password" id="modal-confirmar-senha" placeholder="Repita o código" oninput="confirmarSenha=this.value">
+        <label>Confirmar Senha</label>
+        <input type="password" id="modal-confirmar-senha" placeholder="Repita a senha" onchange="confirmarSenha=this.value">
       </div>
       <div class="modal-buttons">
         <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
@@ -2241,6 +2565,7 @@ function atualizarModalMorador(){
   residenteEdicao.whatsapp = document.getElementById('modal-res-whatsapp').value || residenteEdicao.whatsapp;
   residenteEdicao.email = document.getElementById('modal-res-email').value || residenteEdicao.email;
   residenteEdicao.codigo = document.getElementById('modal-res-codigo').value || residenteEdicao.codigo;
+  residenteEdicao.observacao = document.getElementById('modal-res-obs').value || residenteEdicao.observacao;
   salvarEdicaoMorador();
 }
 
@@ -2248,20 +2573,9 @@ function atualizarModalMorador(){
 function mostrarModal(){
   try { renderModal(); }catch(e){ console.error(e); }
 }
-
-// Rede de segurança: fecha o modal ao clicar fora dele ou apertar Esc.
-// Isso é o que garante que ninguém fique preso numa tela travada pelo celular,
-// onde não existe console do navegador para destravar.
-document.addEventListener('click', function(e){
-  const backdrop = document.getElementById('modal-backdrop');
-  if(backdrop && e.target === backdrop) fecharModal();
-});
-document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape') fecharModal();
-});
 </script>
-<div id="modal-backdrop" style="display:none">
-  <div class="modal-content" id="modal-body"></div>
+<div id="modal-backdrop" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;">
+  <div style="background:white;border-radius:8px;padding:30px;max-width:500px;width:90%;box-shadow:0 4px 12px rgba(0,0,0,0.15);" id="modal-body"></div>
 </div>
 </body>
 </html>
