@@ -2550,6 +2550,9 @@ function renderModal(){
         <button class="btn-primary" onclick="executarResetSenha()">Resetar Senha</button>
       </div>
     `;
+  } else {
+    // Se modalEdicao não for nenhum dos tipos conhecidos, fecha o modal
+    backdrop.style.display = 'none';
   }
 }
 
