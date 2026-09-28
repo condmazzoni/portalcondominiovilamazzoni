@@ -567,6 +567,11 @@ async function initApp(){
   // App instalado na tela inicial / link sem ?condo: reabre o último condomínio usado.
   // Para chegar à área do administrador nesse aparelho, use o endereço com ?admin
   if(!condoParam && !params.has('admin')) condoParam = lerCondoSalvo();
+  // Sem código e com um único condomínio cadastrado: abre direto nele
+  // (resolve atalhos da tela inicial instalados com o endereço genérico).
+  if(!params.has('admin') && (!condoParam || !condominios.some(c=>c.id===condoParam)) && condominios.length === 1){
+    condoParam = condominios[0].id;
+  }
   if(condoParam && condominios.some(c=>c.id===condoParam)){
     condoAtual = condoParam;
     salvarCondo(condoParam);
