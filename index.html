@@ -1278,46 +1278,36 @@ function renderMensagemForm(){
   };
   btnContainer.appendChild(btn);
 
-  // Botão para enviar via WhatsApp (se houver contatos cadastrados)
-  if(config.contatosWhatsapp && config.contatosWhatsapp.length > 0){
-    const btnWhatsapp = document.createElement('button');
-    btnWhatsapp.className='btn btn-ghost';
-    btnWhatsapp.style.background='#25D366';
-    btnWhatsapp.style.color='white';
-    btnWhatsapp.style.border='none';
-    btnWhatsapp.textContent='💬 WhatsApp';
-    btnWhatsapp.disabled = formState.enviando || !formState.mensagem.trim();
-    btnWhatsapp.onclick = ()=>{
+  // Botão único: enviar para WhatsApp + Email (se houver contatos em ambos canais)
+  if(config.contatosWhatsapp && config.contatosWhatsapp.length > 0 && config.contatosEmail && config.contatosEmail.length > 0){
+    const btnAmbos = document.createElement('button');
+    btnAmbos.className='btn btn-primary';
+    btnAmbos.textContent='💬📧 Enviar para WhatsApp + Email';
+    btnAmbos.disabled = formState.enviando || !formState.mensagem.trim();
+    btnAmbos.onclick = ()=>{
       if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
         showToast('Preencha nome, unidade e mensagem.'); return;
       }
-      const msg = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
-      const numeros = config.contatosWhatsapp.map(c => c.numero);
-      enviarParaMultiplosWhatsApp(numeros, msg);
-      showToast('Abrindo WhatsApp... abra cada conversa e envie a mensagem.');
-    };
-    btnContainer.appendChild(btnWhatsapp);
-  }
+      const msgBase = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
 
-  // Botão para enviar via Email (se houver contatos cadastrados)
-  if(config.contatosEmail && config.contatosEmail.length > 0){
-    const btnEmail = document.createElement('button');
-    btnEmail.className='btn btn-ghost';
-    btnEmail.style.background='#EA4335';
-    btnEmail.style.color='white';
-    btnEmail.style.border='none';
-    btnEmail.textContent='📧 Email';
-    btnEmail.disabled = formState.enviando || !formState.mensagem.trim();
-    btnEmail.onclick = ()=>{
-      if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
-        showToast('Preencha nome, unidade e mensagem.'); return;
+      // Mensagem para WhatsApp: adiciona nota sobre anexos
+      let msgWhatsapp = msgBase;
+      if(formState.imagemData || formState.videoData){
+        const tipoAnexo = formState.imagemData ? 'foto' : 'vídeo';
+        msgWhatsapp += `\n\n[Anexo ${tipoAnexo} enviado por Email]`;
       }
-      const msg = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
+
+      // Enviar para WhatsApp
+      const numeros = config.contatosWhatsapp.map(c => c.numero);
+      enviarParaMultiplosWhatsApp(numeros, msgWhatsapp);
+
+      // Enviar para Email (com anexo se houver)
       const emails = config.contatosEmail.map(c => c.email);
-      enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msg);
-      showToast('Abrindo cliente de email... revise e envie a mensagem.');
+      enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msgBase);
+
+      showToast('✓ Mensagem enviada para WhatsApp e Email!');
     };
-    btnContainer.appendChild(btnEmail);
+    btnContainer.appendChild(btnAmbos);
   }
 
   card.appendChild(btnContainer);
