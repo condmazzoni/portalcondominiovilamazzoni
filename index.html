@@ -267,7 +267,7 @@ let senhaAtual = '';
 let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
 
 function defaultConfig(){
-  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null, normasLocacao:'', salaoPreco:'', salaoRegras:'', mural: [], salaoBookings: [], contatosWhatsapp: [] };
+  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null, normasLocacao:'', salaoPreco:'', salaoRegras:'', mural: [], salaoBookings: [], contatosWhatsapp: [], contatosEmail: [] };
 }
 let config = defaultConfig();
 
@@ -783,6 +783,17 @@ function enviarParaMultiplosWhatsApp(numeros, mensagem){
     }, 500); // pequena pausa entre aberturas
   });
 }
+function enviarParaMultiplosEmails(emails, assunto, mensagem){
+  if(!emails || emails.length === 0){
+    showToast('Nenhum contato de email selecionado.');
+    return;
+  }
+  const destinatarios = emails.join(';');
+  const corpo = encodeURIComponent(mensagem);
+  const subject = encodeURIComponent(assunto);
+  const url = `mailto:${destinatarios}?subject=${subject}&body=${corpo}`;
+  window.location.href = url;
+}
 
 /* ---------- render raiz ---------- */
 function render(){
@@ -1274,7 +1285,7 @@ function renderMensagemForm(){
     btnWhatsapp.style.background='#25D366';
     btnWhatsapp.style.color='white';
     btnWhatsapp.style.border='none';
-    btnWhatsapp.textContent='💬 Enviar via WhatsApp';
+    btnWhatsapp.textContent='💬 WhatsApp';
     btnWhatsapp.disabled = formState.enviando || !formState.mensagem.trim();
     btnWhatsapp.onclick = ()=>{
       if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
@@ -1286,6 +1297,27 @@ function renderMensagemForm(){
       showToast('Abrindo WhatsApp... abra cada conversa e envie a mensagem.');
     };
     btnContainer.appendChild(btnWhatsapp);
+  }
+
+  // Botão para enviar via Email (se houver contatos cadastrados)
+  if(config.contatosEmail && config.contatosEmail.length > 0){
+    const btnEmail = document.createElement('button');
+    btnEmail.className='btn btn-ghost';
+    btnEmail.style.background='#EA4335';
+    btnEmail.style.color='white';
+    btnEmail.style.border='none';
+    btnEmail.textContent='📧 Email';
+    btnEmail.disabled = formState.enviando || !formState.mensagem.trim();
+    btnEmail.onclick = ()=>{
+      if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
+        showToast('Preencha nome, unidade e mensagem.'); return;
+      }
+      const msg = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
+      const emails = config.contatosEmail.map(c => c.email);
+      enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msg);
+      showToast('Abrindo cliente de email... revise e envie a mensagem.');
+    };
+    btnContainer.appendChild(btnEmail);
   }
 
   card.appendChild(btnContainer);
@@ -2408,6 +2440,58 @@ function renderConfig(){
   };
   whatsappCard.appendChild(whatsappBtn);
   wrap.appendChild(whatsappCard);
+
+  // Contatos Email
+  const emailCard = document.createElement('div');
+  emailCard.className='card';
+  emailCard.innerHTML = `<h2>📧 Contatos Email</h2><p class="lead">Configure endereços de email para receber mensagens dos moradores. Quando um morador clicar em "Enviar via Email", as mensagens serão enviadas para todos os contatos cadastrados aqui.</p>`;
+
+  if(!config.contatosEmail) config.contatosEmail = [];
+  config.contatosEmail.forEach((contato, idx)=>{
+    const itemDiv = document.createElement('div');
+    itemDiv.style.marginBottom='12px';
+    itemDiv.style.padding='10px';
+    itemDiv.style.background='#f9f9f9';
+    itemDiv.style.borderRadius='4px';
+    itemDiv.style.display='flex';
+    itemDiv.style.gap='8px';
+    itemDiv.style.alignItems='center';
+    itemDiv.innerHTML = `<span style="flex:1;font-size:13.5px;"><strong>${escapeHtml(contato.nome||'Sem nome')}</strong><br>${escapeHtml(contato.email)}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.className='icon-btn'; delBtn.style.color='var(--brick)'; delBtn.textContent='Remover';
+    delBtn.onclick = async ()=>{ config.contatosEmail.splice(idx, 1); await saveConfig(); render(); };
+    itemDiv.appendChild(delBtn);
+    emailCard.appendChild(itemDiv);
+  });
+
+  const emailFieldNome = field('Nome do contato', null);
+  const emailInputNome = document.createElement('input');
+  emailInputNome.type='text'; emailInputNome.placeholder='Ex: Síndico, Portaria, Gerente';
+  emailCard.appendChild(emailFieldNome).appendChild(emailInputNome);
+
+  const emailFieldAddr = field('Endereço de Email', null);
+  const emailInputAddr = document.createElement('input');
+  emailInputAddr.type='email'; emailInputAddr.placeholder='exemplo@condominio.com.br';
+  emailCard.appendChild(emailFieldAddr).appendChild(emailInputAddr);
+
+  const emailBtn = document.createElement('button');
+  emailBtn.className='btn btn-primary'; emailBtn.textContent='Adicionar contato';
+  emailBtn.onclick = async ()=>{
+    const nome = emailInputNome.value.trim();
+    const email = emailInputAddr.value.trim();
+    if(!nome){ showToast('Digite o nome do contato.'); return; }
+    if(!email){ showToast('Digite o email.'); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if(!emailRegex.test(email)){ showToast('Email inválido. Use o formato: exemplo@dominio.com'); return; }
+    config.contatosEmail.push({ nome, email, criadoEm: Date.now() });
+    emailInputNome.value = '';
+    emailInputAddr.value = '';
+    await saveConfig();
+    showToast('Contato adicionado!');
+    render();
+  };
+  emailCard.appendChild(emailBtn);
+  wrap.appendChild(emailCard);
 
   // Mural (Bulletin Board)
   const muralCard = document.createElement('div');
