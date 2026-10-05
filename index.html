@@ -1300,32 +1300,48 @@ function renderMensagemForm(){
       }
 
       try{
-        // Enviar para WhatsApp
+        // 1. Salvar mensagem no sistema
+        const msg = {
+          id: uid(),
+          nome: formState.nome.trim(),
+          unidade: formState.unidade.trim(),
+          tipo: formState.tipo,
+          texto: formState.mensagem.trim(),
+          imagemData: formState.imagemData,
+          videoData: formState.videoData,
+          criadoEm: Date.now(),
+          lida: false,
+          resolvida: false
+        };
+        await saveMessage(msg);
+        messages.unshift(msg);
+
+        // 2. Enviar para WhatsApp
         const numeros = config.contatosWhatsapp.map(c => c.numero);
         enviarParaMultiplosWhatsApp(numeros, msgWhatsapp);
 
-        // Enviar para Email (com anexo se houver) via backend
+        // 3. Enviar para Email (com anexo se houver) via backend
         if(backendConfig){
           const emails = config.contatosEmail.map(c => c.email);
           let anexo = null;
-          if(formState.imagemData) anexo = { dataUrl: formState.imagemData, nome: 'foto.jpg' };
-          else if(formState.videoData) anexo = { dataUrl: formState.videoData, nome: 'video.mp4' };
+          if(msg.imagemData) anexo = { dataUrl: msg.imagemData, nome: 'foto.jpg' };
+          else if(msg.videoData) anexo = { dataUrl: msg.videoData, nome: 'video.mp4' };
 
           // Enviar para cada email via backend
           for(const email of emails){
-            await chamarBackend('/api/enviar-email-multiplo', {
-              destinatario: email,
-              assunto: `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`,
-              mensagem: msgBase,
+            await chamarBackend('/api/notificar-sindico', {
+              canalEmail: true,
+              canalWhatsapp: false,
+              emailPara: email,
+              assunto: `Nova ${labelTipo(msg.tipo).toLowerCase()} — ${msg.unidade}`,
+              mensagem: labelTipo(msg.tipo) + ' de ' + msg.nome + ' (' + msg.unidade + '): ' + msg.texto,
               anexo
             }).catch(e => console.log('Erro ao enviar para', email, e));
           }
-        }else{
-          // Fallback: abrir cliente de email sem anexo
-          const emails = config.contatosEmail.map(c => c.email);
-          enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msgBase);
         }
 
+        // 4. Limpar formulário e mostrar tela de sucesso
+        formState.enviado = true;
         showToast('✓ Mensagem enviada para WhatsApp e Email!');
       }catch(e){
         showToast('Erro ao enviar. Tente novamente.');
