@@ -1284,10 +1284,12 @@ function renderMensagemForm(){
     btnAmbos.className='btn btn-primary';
     btnAmbos.textContent='💬📧 Enviar para WhatsApp + Email';
     btnAmbos.disabled = formState.enviando || !formState.mensagem.trim();
-    btnAmbos.onclick = ()=>{
+    btnAmbos.onclick = async ()=>{
       if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
         showToast('Preencha nome, unidade e mensagem.'); return;
       }
+      formState.enviando = true; render();
+
       const msgBase = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
 
       // Mensagem para WhatsApp: adiciona nota sobre anexos
@@ -1297,15 +1299,39 @@ function renderMensagemForm(){
         msgWhatsapp += `\n\n[Anexo ${tipoAnexo} enviado por Email]`;
       }
 
-      // Enviar para WhatsApp
-      const numeros = config.contatosWhatsapp.map(c => c.numero);
-      enviarParaMultiplosWhatsApp(numeros, msgWhatsapp);
+      try{
+        // Enviar para WhatsApp
+        const numeros = config.contatosWhatsapp.map(c => c.numero);
+        enviarParaMultiplosWhatsApp(numeros, msgWhatsapp);
 
-      // Enviar para Email (com anexo se houver)
-      const emails = config.contatosEmail.map(c => c.email);
-      enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msgBase);
+        // Enviar para Email (com anexo se houver) via backend
+        if(backendConfig){
+          const emails = config.contatosEmail.map(c => c.email);
+          let anexo = null;
+          if(formState.imagemData) anexo = { dataUrl: formState.imagemData, nome: 'foto.jpg' };
+          else if(formState.videoData) anexo = { dataUrl: formState.videoData, nome: 'video.mp4' };
 
-      showToast('✓ Mensagem enviada para WhatsApp e Email!');
+          // Enviar para cada email via backend
+          for(const email of emails){
+            await chamarBackend('/api/enviar-email-multiplo', {
+              destinatario: email,
+              assunto: `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`,
+              mensagem: msgBase,
+              anexo
+            }).catch(e => console.log('Erro ao enviar para', email, e));
+          }
+        }else{
+          // Fallback: abrir cliente de email sem anexo
+          const emails = config.contatosEmail.map(c => c.email);
+          enviarParaMultiplosEmails(emails, `Nova ${labelTipo(formState.tipo).toLowerCase()} - ${formState.unidade}`, msgBase);
+        }
+
+        showToast('✓ Mensagem enviada para WhatsApp e Email!');
+      }catch(e){
+        showToast('Erro ao enviar. Tente novamente.');
+      }
+      formState.enviando = false;
+      render();
     };
     btnContainer.appendChild(btnAmbos);
   }
