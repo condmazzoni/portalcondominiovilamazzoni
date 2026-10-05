@@ -4,11 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portal do Condomínio</title>
-<meta name="theme-color" content="#0066cc">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Portal Cond.">
-<link rel="manifest" id="manifestLink" href="manifest.json">
 <style>
   :root{
     --bg:#F2F4F3;
@@ -272,7 +267,7 @@ let senhaAtual = '';
 let visitanteFiltro = 'todos'; // todos | pendente | aprovado | reprovado
 
 function defaultConfig(){
-  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null, normasLocacao:'', salaoPreco:'', salaoRegras:'', mural: [], salaoBookings: [] };
+  return { nomeCondominio:'', pin:'1234', whatsappNumero:'', whatsappTokenSalvo:false, emailEndereco:'', emailHostSalvo:false, whatsappAtivo:true, emailAtivo:true, aprovacaoObrigatoria:false, regimento: null, normasLocacao:'', salaoPreco:'', salaoRegras:'', mural: [], salaoBookings: [], contatosWhatsapp: [] };
 }
 let config = defaultConfig();
 
@@ -349,7 +344,7 @@ function resetSessionState(){
   formState = { nome:'', unidade:'', tipo:'sugestao', mensagem:'', imagemData:null, imagemNome:'', videoData:null, videoNome:'', enviando:false, enviado:false };
   visitorFormState = { nomeMorador:'', unidade:'', nomeVisitante:'', cpf:'', rg:'', grau:'visitante', data:'', entrada:'', saida:'', dataSaida:'', enviando:false, enviado:false };
   visitanteFiltro='todos';
-  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true; broadcastAssunto=''; broadcastAnexos=[];
+  broadcastSelecionados = new Set(); broadcastTexto=''; broadcastCanalWA=true; broadcastCanalEmail=true;
   novoResidente = { nome:'', unidade:'', whatsapp:'', email:'', codigo:'', observacao:'' };
 }
 
@@ -522,66 +517,15 @@ function exportarVisitantesPDF(){
   showToast('Visitantes exportados em PDF!');
 }
 
-/* ---------- App na tela inicial: sempre abrir o condomínio certo ---------- */
-const CHAVE_CONDO_SALVO = 'portal_condo_atual';
-function lerCondoSalvo(){ try{ return localStorage.getItem(CHAVE_CONDO_SALVO) || null; }catch(e){ return null; } }
-function salvarCondo(id){ try{ localStorage.setItem(CHAVE_CONDO_SALVO, id); }catch(e){} }
-function esquecerCondo(){ try{ localStorage.removeItem(CHAVE_CONDO_SALVO); }catch(e){} }
-function configurarInstalacao(id){
-  try{
-    const base = baseUrl();
-    if(!base) return;
-    const c = condominios.find(x=>x.id===id);
-    const nome = (c && c.nome) ? c.nome : 'Condomínio';
-    const curto = nome.length > 12 ? nome.slice(0, 12).trim() : nome;
-    const icone = (tam) => 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="${tam}" height="${tam}" viewBox="0 0 ${tam} ${tam}"><rect width="${tam}" height="${tam}" rx="${Math.round(tam*0.23)}" fill="#0066cc"/><text x="50%" y="50%" font-family="Arial" font-size="${Math.round(tam/2)}" font-weight="bold" fill="#fff" text-anchor="middle" dy=".35em">${(nome.replace(/^(condom[ií]nio|residencial|cond\.?)\s+/i,'')[0]||'C').toUpperCase()}</text></svg>`);
-    const manifesto = {
-      name: 'Portal ' + nome,
-      short_name: curto,
-      description: 'Portal do morador — ' + nome,
-      id: base + '?condo=' + encodeURIComponent(id),
-      start_url: base + '?condo=' + encodeURIComponent(id),
-      scope: base,
-      display: 'standalone',
-      background_color: '#ffffff',
-      theme_color: '#0066cc',
-      icons: [
-        { src: icone(192), sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-        { src: icone(512), sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
-      ]
-    };
-    let link = document.getElementById('manifestLink');
-    if(!link){ link = document.createElement('link'); link.rel = 'manifest'; link.id = 'manifestLink'; document.head.appendChild(link); }
-    link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifesto));
-    document.title = 'Portal ' + nome;
-    let t = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-    if(t) t.content = curto;
-  }catch(e){ /* nunca impedir o portal de abrir */ }
-}
-
 async function initApp(){
   await loadCondominios();
   await loadMasterConfig();
   const params = new URLSearchParams(window.location.search);
-  let condoParam = params.get('condo');
-  // App instalado na tela inicial / link sem ?condo: reabre o último condomínio usado.
-  // Para chegar à área do administrador nesse aparelho, use o endereço com ?admin
-  if(!condoParam && !params.has('admin')) condoParam = lerCondoSalvo();
-  // Sem código e com um único condomínio cadastrado: abre direto nele
-  // (resolve atalhos da tela inicial instalados com o endereço genérico).
-  if(!params.has('admin') && (!condoParam || !condominios.some(c=>c.id===condoParam)) && condominios.length === 1){
-    condoParam = condominios[0].id;
-  }
+  const condoParam = params.get('condo');
   if(condoParam && condominios.some(c=>c.id===condoParam)){
     condoAtual = condoParam;
-    salvarCondo(condoParam);
-    const base = baseUrl();
-    if(base && params.get('condo') !== condoParam) safeReplaceState(base + '?condo=' + condoParam);
-    configurarInstalacao(condoParam);
     await loadCondoData(condoAtual);
     view = 'morador'; // força a tela do morador
-  } else if(condoParam){
-    esquecerCondo(); // condomínio salvo não existe mais
   }
   carregando = false;
   render();
@@ -606,13 +550,10 @@ async function entrarNoCondo(id){
   render();
   const base = baseUrl();
   if(base) safeReplaceState(base + '?condo=' + id);
-  salvarCondo(id);
-  configurarInstalacao(id);
   await loadCondoData(id);
 }
 
 function sairDoCondo(){
-  esquecerCondo();
   condoAtual = null;
   condoScreenState = 'landing';
   resetSessionState();
@@ -806,6 +747,40 @@ function getVideoDuration(file){
     v.onloadedmetadata = ()=>{ URL.revokeObjectURL(v.src); res(v.duration); };
     v.onerror = ()=> res(null);
     v.src = URL.createObjectURL(file);
+  });
+}
+
+/* ---------- WhatsApp utilities ---------- */
+function formatarWhatsApp(numero){
+  // Remove tudo que não é número
+  const limpo = (numero||'').replace(/\D/g,'');
+  // Se tiver menos de 10 dígitos ou mais de 13, retorna null (inválido)
+  if(limpo.length < 10 || limpo.length > 13) return null;
+  // Se não começar com +, assume Brasil (55)
+  if(!numero.startsWith('+') && limpo.length === 11) {
+    return '55' + limpo;
+  }
+  return limpo;
+}
+function abrirWhatsApp(numero, mensagem){
+  const numeroFormatado = formatarWhatsApp(numero);
+  if(!numeroFormatado){
+    showToast('Número de WhatsApp inválido.');
+    return;
+  }
+  const texto = encodeURIComponent(mensagem);
+  const url = `https://wa.me/${numeroFormatado}?text=${texto}`;
+  window.open(url, '_blank');
+}
+function enviarParaMultiplosWhatsApp(numeros, mensagem){
+  if(!numeros || numeros.length === 0){
+    showToast('Nenhum contato selecionado.');
+    return;
+  }
+  numeros.forEach(num => {
+    setTimeout(() => {
+      abrirWhatsApp(num, mensagem);
+    }, 500); // pequena pausa entre aberturas
   });
 }
 
@@ -1239,6 +1214,12 @@ function renderMensagemForm(){
   vidField.appendChild(vidInput);
   card.appendChild(vidField);
 
+  // Container para botões
+  const btnContainer = document.createElement('div');
+  btnContainer.style.display='flex';
+  btnContainer.style.gap='10px';
+  btnContainer.style.flexWrap='wrap';
+
   const btn = document.createElement('button');
   btn.className='btn btn-primary';
   btn.textContent = formState.enviando ? 'Enviando...' : 'Enviar mensagem';
@@ -1284,7 +1265,30 @@ function renderMensagemForm(){
     formState.enviando = false;
     render();
   };
-  card.appendChild(btn);
+  btnContainer.appendChild(btn);
+
+  // Botão para enviar via WhatsApp (se houver contatos cadastrados)
+  if(config.contatosWhatsapp && config.contatosWhatsapp.length > 0){
+    const btnWhatsapp = document.createElement('button');
+    btnWhatsapp.className='btn btn-ghost';
+    btnWhatsapp.style.background='#25D366';
+    btnWhatsapp.style.color='white';
+    btnWhatsapp.style.border='none';
+    btnWhatsapp.textContent='💬 Enviar via WhatsApp';
+    btnWhatsapp.disabled = formState.enviando || !formState.mensagem.trim();
+    btnWhatsapp.onclick = ()=>{
+      if(!formState.nome.trim() || !formState.unidade.trim() || !formState.mensagem.trim()){
+        showToast('Preencha nome, unidade e mensagem.'); return;
+      }
+      const msg = `${labelTipo(formState.tipo).toUpperCase()}\n\nDe: ${formState.nome}\nUnidade: ${formState.unidade}\n\n${formState.mensagem}`;
+      const numeros = config.contatosWhatsapp.map(c => c.numero);
+      enviarParaMultiplosWhatsApp(numeros, msg);
+      showToast('Abrindo WhatsApp... abra cada conversa e envie a mensagem.');
+    };
+    btnContainer.appendChild(btnWhatsapp);
+  }
+
+  card.appendChild(btnContainer);
 
   wrap.appendChild(card);
   return wrap;
@@ -1752,9 +1756,6 @@ let broadcastSelecionados = new Set();
 let broadcastTexto = '';
 let broadcastCanalWA = true;
 let broadcastCanalEmail = true;
-let broadcastAssunto = '';
-let broadcastAnexos = []; // [{nome, tipo, tamanho, dataUrl}]
-const ANEXO_MAX_TOTAL = 15 * 1024 * 1024;
 
 function renderEnviar(){
   const wrap = document.createElement('div');
@@ -1810,63 +1811,12 @@ function renderEnviar(){
     card.appendChild(list);
   }
 
-  const assuntoField = field('Assunto do e-mail', null);
-  const assuntoIn = document.createElement('input');
-  assuntoIn.type='text'; assuntoIn.value = broadcastAssunto;
-  assuntoIn.placeholder = (config.nomeCondominio || 'Condomínio') + ' — comunicado';
-  assuntoIn.oninput = e=> broadcastAssunto = e.target.value;
-  assuntoField.appendChild(assuntoIn);
-  card.appendChild(assuntoField);
-
   const msgField = field('Mensagem', null);
   const ta = document.createElement('textarea');
   ta.value = broadcastTexto; ta.placeholder='Escreva o comunicado...';
   ta.oninput = e=> broadcastTexto = e.target.value;
   msgField.appendChild(ta);
   card.appendChild(msgField);
-
-  // ---- Anexos (foto, PDF, documento) enviados junto com o e-mail ----
-  const anexoField = field('Anexos (opcional)', null);
-  const totalAtual = () => broadcastAnexos.reduce((t,a)=>t+a.tamanho,0);
-  const fmtTam = (b) => b >= 1048576 ? (b/1048576).toFixed(1).replace('.',',')+' MB' : Math.max(1,Math.round(b/1024))+' KB';
-  const lista = document.createElement('div');
-  lista.style.display='flex'; lista.style.flexDirection='column'; lista.style.gap='6px'; lista.style.margin='6px 0';
-  broadcastAnexos.forEach((a, i)=>{
-    const item = document.createElement('div');
-    item.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:13px';
-    const nome = document.createElement('span');
-    nome.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    nome.textContent = '📎 ' + a.nome + ' (' + fmtTam(a.tamanho) + ')';
-    const rm = document.createElement('button');
-    rm.type='button'; rm.className='btn'; rm.textContent='Remover';
-    rm.style.cssText='padding:4px 10px;font-size:12px';
-    rm.onclick = ()=>{ broadcastAnexos.splice(i,1); render(); };
-    item.appendChild(nome); item.appendChild(rm);
-    lista.appendChild(item);
-  });
-  anexoField.appendChild(lista);
-  const fileIn = document.createElement('input');
-  fileIn.type='file'; fileIn.multiple = true; fileIn.style.display='none';
-  fileIn.accept='image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt';
-  fileIn.onchange = async ()=>{
-    for(const f of Array.from(fileIn.files || [])){
-      if(totalAtual() + f.size > ANEXO_MAX_TOTAL){ showToast('Limite de 15 MB no total dos anexos. "' + f.name + '" não foi incluído.'); continue; }
-      const dataUrl = await new Promise((ok, erro)=>{ const r = new FileReader(); r.onload = ()=>ok(r.result); r.onerror = erro; r.readAsDataURL(f); });
-      broadcastAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dataUrl });
-    }
-    render();
-  };
-  const addBtn = document.createElement('button');
-  addBtn.type='button'; addBtn.className='btn';
-  addBtn.textContent = broadcastAnexos.length ? '+ Adicionar outro arquivo' : '📎 Anexar foto, PDF ou documento';
-  addBtn.onclick = ()=> fileIn.click();
-  anexoField.appendChild(addBtn);
-  anexoField.appendChild(fileIn);
-  const dica = document.createElement('div');
-  dica.style.cssText='font-size:12px;color:#64748b;margin-top:6px';
-  dica.textContent = 'Os anexos vão junto no e-mail. Máximo de 15 MB no total.' + (broadcastAnexos.length ? ' Usado: ' + fmtTam(totalAtual()) + '.' : '');
-  anexoField.appendChild(dica);
-  card.appendChild(anexoField);
 
   const channels = document.createElement('div');
   channels.style.display='flex'; channels.style.gap='18px'; channels.style.margin='4px 0 18px';
@@ -1886,8 +1836,6 @@ function renderEnviar(){
       destinatarios: [...broadcastSelecionados],
       canalWhatsapp: broadcastCanalWA,
       canalEmail: broadcastCanalEmail,
-      assunto: broadcastAssunto.trim() || null,
-      anexosNomes: broadcastAnexos.map(a=>a.nome),
       criadoEm: Date.now(),
       status: 'pendente_integracao'
     };
@@ -1903,10 +1851,8 @@ function renderEnviar(){
         mensagem: bc.texto,
         canalWhatsapp: bc.canalWhatsapp,
         canalEmail: bc.canalEmail,
-        assunto: broadcastAssunto.trim() || ((config.nomeCondominio || 'Condomínio') + ' — comunicado'),
-        destinatarios: destinatariosInfo,
-        anexos: broadcastAnexos.map(a=>({ dataUrl: a.dataUrl, nome: a.nome, tipo: a.tipo })),
-        anexo: broadcastAnexos.length ? { dataUrl: broadcastAnexos[0].dataUrl, nome: broadcastAnexos[0].nome, tipo: broadcastAnexos[0].tipo } : null
+        assunto: (config.nomeCondominio || 'Condomínio') + ' — comunicado',
+        destinatarios: destinatariosInfo
       });
       btn.disabled = false;
       if(resultado && resultado.erro){
@@ -1924,7 +1870,7 @@ function renderEnviar(){
     } else {
       showToast('Mensagem registrada para '+totalDestinatarios+' morador(es). Configure o backend em Configurações para o envio real.');
     }
-    broadcastTexto=''; broadcastSelecionados=new Set(); broadcastAssunto=''; broadcastAnexos=[];
+    broadcastTexto=''; broadcastSelecionados=new Set();
     render();
   };
   card.appendChild(btn);
@@ -2410,6 +2356,58 @@ function renderConfig(){
   normasSaveBtn.onclick = async ()=>{ await saveConfig(); showToast('Normas de locação atualizadas.'); };
   normasCard.appendChild(normasSaveBtn);
   wrap.appendChild(normasCard);
+
+  // Contatos WhatsApp
+  const whatsappCard = document.createElement('div');
+  whatsappCard.className='card';
+  whatsappCard.innerHTML = `<h2>📱 Contatos WhatsApp</h2><p class="lead">Configure números de WhatsApp para receber mensagens dos moradores. Quando um morador clicar em "Enviar via WhatsApp", as mensagens serão enviadas para todos os contatos cadastrados aqui.</p>`;
+
+  if(!config.contatosWhatsapp) config.contatosWhatsapp = [];
+  config.contatosWhatsapp.forEach((contato, idx)=>{
+    const itemDiv = document.createElement('div');
+    itemDiv.style.marginBottom='12px';
+    itemDiv.style.padding='10px';
+    itemDiv.style.background='#f9f9f9';
+    itemDiv.style.borderRadius='4px';
+    itemDiv.style.display='flex';
+    itemDiv.style.gap='8px';
+    itemDiv.style.alignItems='center';
+    itemDiv.innerHTML = `<span style="flex:1;font-size:13.5px;"><strong>${escapeHtml(contato.nome||'Sem nome')}</strong><br>${escapeHtml(contato.numero)}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.className='icon-btn'; delBtn.style.color='var(--brick)'; delBtn.textContent='Remover';
+    delBtn.onclick = async ()=>{ config.contatosWhatsapp.splice(idx, 1); await saveConfig(); render(); };
+    itemDiv.appendChild(delBtn);
+    whatsappCard.appendChild(itemDiv);
+  });
+
+  const whatsappFieldNome = field('Nome do contato', null);
+  const whatsappInputNome = document.createElement('input');
+  whatsappInputNome.type='text'; whatsappInputNome.placeholder='Ex: Síndico, Portaria, Gerente';
+  whatsappCard.appendChild(whatsappFieldNome).appendChild(whatsappInputNome);
+
+  const whatsappFieldNum = field('Número WhatsApp', null);
+  const whatsappInputNum = document.createElement('input');
+  whatsappInputNum.type='tel'; whatsappInputNum.placeholder='(11) 99999-9999 ou +55 11 99999-9999';
+  whatsappCard.appendChild(whatsappFieldNum).appendChild(whatsappInputNum);
+
+  const whatsappBtn = document.createElement('button');
+  whatsappBtn.className='btn btn-primary'; whatsappBtn.textContent='Adicionar contato';
+  whatsappBtn.onclick = async ()=>{
+    const nome = whatsappInputNome.value.trim();
+    const numero = whatsappInputNum.value.trim();
+    if(!nome){ showToast('Digite o nome do contato.'); return; }
+    if(!numero){ showToast('Digite o número de WhatsApp.'); return; }
+    const numeroFormatado = formatarWhatsApp(numero);
+    if(!numeroFormatado){ showToast('Número de WhatsApp inválido. Use formato: (11) 99999-9999'); return; }
+    config.contatosWhatsapp.push({ nome, numero: numeroFormatado, criadoEm: Date.now() });
+    whatsappInputNome.value = '';
+    whatsappInputNum.value = '';
+    await saveConfig();
+    showToast('Contato adicionado!');
+    render();
+  };
+  whatsappCard.appendChild(whatsappBtn);
+  wrap.appendChild(whatsappCard);
 
   // Mural (Bulletin Board)
   const muralCard = document.createElement('div');
