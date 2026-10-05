@@ -2442,9 +2442,9 @@ function renderConfig(){
   wrap.appendChild(whatsappCard);
 
   // Contatos Email
-  const emailCard = document.createElement('div');
-  emailCard.className='card';
-  emailCard.innerHTML = `<h2>📧 Contatos Email</h2><p class="lead">Configure endereços de email para receber mensagens dos moradores. Quando um morador clicar em "Enviar via Email", as mensagens serão enviadas para todos os contatos cadastrados aqui.</p>`;
+  const contatosEmailCard = document.createElement('div');
+  contatosEmailCard.className='card';
+  contatosEmailCard.innerHTML = `<h2>📧 Contatos Email</h2><p class="lead">Configure endereços de email para receber mensagens dos moradores. Quando um morador clicar em "Enviar via Email", as mensagens serão enviadas para todos os contatos cadastrados aqui.</p>`;
 
   if(!config.contatosEmail) config.contatosEmail = [];
   config.contatosEmail.forEach((contato, idx)=>{
@@ -2461,18 +2461,18 @@ function renderConfig(){
     delBtn.className='icon-btn'; delBtn.style.color='var(--brick)'; delBtn.textContent='Remover';
     delBtn.onclick = async ()=>{ config.contatosEmail.splice(idx, 1); await saveConfig(); render(); };
     itemDiv.appendChild(delBtn);
-    emailCard.appendChild(itemDiv);
+    contatosEmailCard.appendChild(itemDiv);
   });
 
   const emailFieldNome = field('Nome do contato', null);
   const emailInputNome = document.createElement('input');
   emailInputNome.type='text'; emailInputNome.placeholder='Ex: Síndico, Portaria, Gerente';
-  emailCard.appendChild(emailFieldNome).appendChild(emailInputNome);
+  contatosEmailCard.appendChild(emailFieldNome).appendChild(emailInputNome);
 
   const emailFieldAddr = field('Endereço de Email', null);
   const emailInputAddr = document.createElement('input');
   emailInputAddr.type='email'; emailInputAddr.placeholder='exemplo@condominio.com.br';
-  emailCard.appendChild(emailFieldAddr).appendChild(emailInputAddr);
+  contatosEmailCard.appendChild(emailFieldAddr).appendChild(emailInputAddr);
 
   const emailBtn = document.createElement('button');
   emailBtn.className='btn btn-primary'; emailBtn.textContent='Adicionar contato';
@@ -2490,8 +2490,8 @@ function renderConfig(){
     showToast('Contato adicionado!');
     render();
   };
-  emailCard.appendChild(emailBtn);
-  wrap.appendChild(emailCard);
+  contatosEmailCard.appendChild(emailBtn);
+  wrap.appendChild(contatosEmailCard);
 
   // Mural (Bulletin Board)
   const muralCard = document.createElement('div');
